@@ -89,6 +89,9 @@
 #include <thread>
 #include <type_traits>
 #include <unordered_map>
+#include <set>
+#include <iostream>
+#include <forward_list>
 
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
@@ -2299,6 +2302,7 @@ struct llama_kv_cell {
     llama_pos delta = 0;
     int32_t   src   = 0; // used by recurrent state models to copy states
 
+    llama_token value = -1;
     std::set<llama_seq_id> seq_id;
 
     bool has_seq_id(const llama_seq_id & id) const {
@@ -2939,6 +2943,7 @@ static bool llama_kv_cache_find_slot(
 
     for (uint32_t i = 0; i < n_tokens; i++) {
         cache.cells[cache.head + i].pos = batch.pos[i];
+        cache.cells[cache.head + i].value = batch.token[i];
 
         for (int32_t j = 0; j < batch.n_seq_id[i]; j++) {
             cache.cells[cache.head + i].seq_id.insert(batch.seq_id[i][j]);
@@ -3019,6 +3024,7 @@ static bool llama_kv_cache_seq_rm(
                 if (cache.cells[i].pos >= 0) cache.used--;
 
                 cache.cells[i].pos = -1;
+                cache.cells[i].delta = 0;
                 if (new_head == cache.size) new_head = i;
             }
         }
@@ -3078,6 +3084,7 @@ static void llama_kv_cache_seq_keep(struct llama_kv_cache & cache, llama_seq_id 
         if (!cache.cells[i].has_seq_id(seq_id)) {
             if (cache.cells[i].pos >= 0) cache.used--;
             cache.cells[i].pos = -1;
+            cache.cells[i].delta = 0;
             cache.cells[i].seq_id.clear();
             if (new_head == cache.size) new_head = i;
         } else {
@@ -3123,6 +3130,7 @@ static void llama_kv_cache_seq_add(
                     cache.used--;
                 }
                 cache.cells[i].pos = -1;
+                cache.cells[i].delta = 0;
                 cache.cells[i].seq_id.clear();
                 if (new_head == cache.size) {
                     new_head = i;
@@ -12745,6 +12753,10 @@ static void llama_graph_compute(
     // fprintf(stderr, "splits: %d\n", ggml_backend_sched_get_n_splits(lctx.sched));
 }
 
+struct llama_kv_cache* llama_get_kv_cache(struct llama_context* ctx) {
+    return &(ctx->kv_self);
+}
+
 // decode a batch of tokens by evaluating the transformer
 //
 //   - lctx:      llama context
@@ -14572,7 +14584,7 @@ static std::vector<llama_vocab::id> llama_tokenize_internal(const llama_vocab & 
 
                         if (vocab.tokenizer_add_space_prefix) {
                             if (!output.size() || is_prev_special) {  // prefix with space if first token
-                                raw_text = " " + raw_text;
+                                //raw_text = " " + raw_text;
                             }
                         }
 

@@ -57,6 +57,7 @@ extern "C" {
 
     struct llama_model;
     struct llama_context;
+    struct llama_kv_cache;
 
     typedef int32_t llama_pos;
     typedef int32_t llama_token;
@@ -647,6 +648,7 @@ extern "C" {
     // Apply the KV cache updates (such as K-shifts, defragmentation, etc.)
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
+    LLAMA_API struct llama_kv_cache* llama_get_kv_cache(struct llama_context* ctx);
     //
     // State / sessions
     //
