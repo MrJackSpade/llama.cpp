@@ -86,7 +86,14 @@
             "name": "arm64-windows-msvc+static-release",
             "inherits": [ "base", "arm64-windows-msvc", "reldbg", "static" ]
         },
-
+        {
+            "name": "x64-windows-msvc+static+cuda-release",
+            "inherits": [ "base", "reldbg", "static" ],
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON",
+                "LLAMA_CUDA": "ON"
+            }
+        },
         {
             "name": "x64-windows-msvc-debug",
             "inherits": [ "base", "debug" ]
