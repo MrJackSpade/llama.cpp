@@ -24,10 +24,10 @@
             "CMAKE_INSTALL_RPATH": "$ORIGIN;$ORIGIN/.."
         }
     },
-    { "name": "debug",   "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
-    { "name": "release", "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
-    { "name": "reldbg",  "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
-    { "name": "static",  "hidden": true, "cacheVariables": { "GGML_STATIC": "ON" } },
+        { "name": "debug",   "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" } },
+        { "name": "release", "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" } },
+        { "name": "reldbg",  "hidden": true, "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" } },
+        { "name": "static",  "hidden": true, "cacheVariables": { "GGML_STATIC": "ON" } },
 
         {
             "name": "arm64-windows-msvc",
