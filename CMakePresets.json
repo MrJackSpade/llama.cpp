@@ -87,7 +87,7 @@
         },
         {
             "name": "arm64-windows-llvm+static-release",
-            "inherits": [ "base", "arm64-windows-llvm", "reldbg", "static" ]
+            "inherits": [ "release", "arm64-windows-llvm", "reldbg", "static" ]
         },
 
         {
@@ -104,7 +104,7 @@
         },
         {
             "name": "x64-windows-msvc+static+cuda-release",
-            "inherits": [ "base", "reldbg", "static" ],
+            "inherits": [ "release", "reldbg", "static" ],
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON",
                 "LLAMA_CUDA": "ON",
@@ -113,7 +113,7 @@
         },
         {
             "name": "x64-linux-cuda-static",
-            "inherits": [ "base", "static" ],
+            "inherits": [ "release", "static" ],
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON",
                 "LLAMA_CUDA": "ON",
