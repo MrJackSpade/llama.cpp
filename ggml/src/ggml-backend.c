@@ -322,9 +322,6 @@ void ggml_backend_tensor_copy(struct ggml_tensor * src, struct ggml_tensor * dst
     } else if (ggml_backend_buffer_is_host(dst->buffer)) {
         ggml_backend_tensor_get(src, dst->data, 0, ggml_nbytes(src));
     } else if (!ggml_backend_buffer_copy_tensor(src, dst)) {
-#ifndef NDEBUG
-        fprintf(stderr, "%s: warning: slow copy from %s to %s\n", __func__, ggml_backend_buffer_name(src->buffer), ggml_backend_buffer_name(dst->buffer));
-#endif
         size_t nbytes = ggml_nbytes(src);
         void * data = malloc(nbytes);
         ggml_backend_tensor_get(src, data, 0, nbytes);
@@ -460,10 +457,6 @@ GGML_CALL void ggml_backend_register(const char * name, ggml_backend_init_fn ini
     };
 
     snprintf(ggml_backend_registry[id].name, sizeof(ggml_backend_registry[id].name), "%s", name);
-
-#ifndef NDEBUG
-    fprintf(stderr, "%s: registered backend %s\n", __func__, name);
-#endif
 
     ggml_backend_registry_count++;
 }
@@ -1115,11 +1108,6 @@ static int ggml_backend_sched_backend_from_buffer(ggml_backend_sched_t sched, co
             return i;
         }
     }
-
-#ifndef NDEBUG
-    fprintf(stderr, "%s: warning: no backend supports op %s with a weight with buffer type %s used in tensor %s, the weight will need to be copied\n",
-        __func__, ggml_op_desc(tensor), ggml_backend_buffer_name(buffer), tensor->name);
-#endif
 
     return -1;
 }

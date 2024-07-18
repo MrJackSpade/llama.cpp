@@ -14413,10 +14413,6 @@ static size_t llama_output_reserve(llama_context & lctx, size_t n_outputs) {
     // TODO: also consider shrinking the buffer
     if (!lctx.buf_output || prev_size < new_size) {
         if (lctx.buf_output) {
-#ifndef NDEBUG
-            // This doesn't happen often, but may be annoying in some cases (like the HellaSwag benchmark)
-            LLAMA_LOG_INFO("%s: reallocating output buffer from size %.02f MiB to %.02f MiB\n", __func__, prev_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
-#endif
             ggml_backend_buffer_free(lctx.buf_output);
             lctx.buf_output = nullptr;
             lctx.logits = nullptr;
@@ -21006,9 +21002,7 @@ float * llama_get_logits_ith(struct llama_context * ctx, int32_t i) {
         return ctx->logits + j*ctx->model.hparams.n_vocab;
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: invalid logits id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ASSERT(false);
-#endif
+
         return nullptr;
     }
 }
@@ -21051,9 +21045,6 @@ float * llama_get_embeddings_ith(struct llama_context * ctx, int32_t i) {
         return ctx->embd + j*ctx->model.hparams.n_embd;
     } catch (const std::exception & err) {
         LLAMA_LOG_ERROR("%s: invalid embeddings id %d, reason: %s\n", __func__, i, err.what());
-#ifndef NDEBUG
-        GGML_ASSERT(false);
-#endif
         return nullptr;
     }
 }

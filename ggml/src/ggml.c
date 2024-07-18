@@ -11335,14 +11335,6 @@ static void ggml_compute_forward_gelu_f32(
                 (float *) ((char *) dst->data  + i1*( dst->nb[1])),
                 (float *) ((char *) src0->data + i1*(src0->nb[1])));
 
-#ifndef NDEBUG
-        for (int k = 0; k < nc; k++) {
-            const float x = ((float *) ((char *) dst->data + i1*( dst->nb[1])))[k];
-            UNUSED(x);
-            assert(!isnan(x));
-            assert(!isinf(x));
-        }
-#endif
     }
 }
 
@@ -11393,15 +11385,6 @@ static void ggml_compute_forward_gelu_quick_f32(
         ggml_vec_gelu_quick_f32(nc,
                 (float *) ((char *) dst->data  + i1*( dst->nb[1])),
                 (float *) ((char *) src0->data + i1*(src0->nb[1])));
-
-#ifndef NDEBUG
-        for (int k = 0; k < nc; k++) {
-            const float x = ((float *) ((char *) dst->data + i1*( dst->nb[1])))[k];
-            UNUSED(x);
-            assert(!isnan(x));
-            assert(!isinf(x));
-        }
-#endif
     }
 }
 
@@ -11452,15 +11435,6 @@ static void ggml_compute_forward_silu_f32(
         ggml_vec_silu_f32(nc,
                 (float *) ((char *) dst->data  + i1*( dst->nb[1])),
                 (float *) ((char *) src0->data + i1*(src0->nb[1])));
-
-#ifndef NDEBUG
-        for (int k = 0; k < nc; k++) {
-            const float x = ((float *) ((char *) dst->data + i1*(dst->nb[1])))[k];
-            UNUSED(x);
-            assert(!isnan(x));
-            assert(!isinf(x));
-        }
-#endif
     }
 }
 
@@ -11565,14 +11539,6 @@ static void ggml_compute_forward_silu_back_f32(
                 (float *) ((char *) src0->data + i1*(src0->nb[1])),
                 (float *) ((char *) grad->data + i1*(grad->nb[1])));
 
-#ifndef NDEBUG
-        for (int k = 0; k < nc; k++) {
-            const float x = ((float *) ((char *) dst->data + i1*( dst->nb[1])))[k];
-            UNUSED(x);
-            assert(!isnan(x));
-            assert(!isinf(x));
-        }
-#endif
     }
 }
 
@@ -13656,13 +13622,6 @@ static void ggml_compute_forward_soft_max_f32(
             }
         }
 
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            //printf("p[%d] = %f\n", i, p[i]);
-            assert(!isnan(wp[i]));
-        }
-#endif
-
         float max = -INFINITY;
         ggml_vec_max_f32(nc, &max, wp);
 
@@ -13671,13 +13630,6 @@ static void ggml_compute_forward_soft_max_f32(
 
         sum = 1.0/sum;
         ggml_vec_scale_f32(nc, dp, sum);
-
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            assert(!isnan(dp[i]));
-            assert(!isinf(dp[i]));
-        }
-#endif
     }
 }
 
@@ -13734,13 +13686,6 @@ static void ggml_compute_forward_soft_max_back_f32(
         float *y  = (float *)((char *) src1->data + i1*src1->nb[1]);
         float *dx = (float *)((char *) dst->data  + i1*dst->nb[1]);
 
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            //printf("p[%d] = %f\n", i, p[i]);
-            assert(!isnan(dy[i]));
-            assert(!isnan(y[i]));
-        }
-#endif
         // Jii = yi - yi*yi
         // Jij = -yi*yj
         // J = diag(y)-y.T*y
@@ -13766,13 +13711,6 @@ static void ggml_compute_forward_soft_max_back_f32(
         ggml_vec_cpy_f32 (nc, dx, dy);
         ggml_vec_acc1_f32(nc, dx, -dot_y_dy);
         ggml_vec_mul_f32 (nc, dx, dx, y);
-
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            assert(!isnan(dx[i]));
-            assert(!isinf(dx[i]));
-        }
-#endif
     }
 }
 
@@ -16478,14 +16416,6 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
         float * s1 = (float *)((char *) src1->data + i1*src1->nb[1]);
         float * st = ((float *) params->wdata) + nth + ith*nc;
 
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            //printf("p[%d] = %f\n", i, p[i]);
-            assert(!isnan(s0[i]));
-            assert(!isnan(s1[i]));
-        }
-#endif
-
         // soft_max
         float max = -INFINITY;
         ggml_vec_max_f32(nc, &max, s0);
@@ -16502,13 +16432,6 @@ static void ggml_compute_forward_cross_entropy_loss_f32(
         float st_sum = 0;
         ggml_vec_sum_f32(nc, &st_sum, st);
         sums[ith] += st_sum;
-
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            assert(!isnan(st[i]));
-            assert(!isinf(st[i]));
-        }
-#endif
     }
     ggml_barrier(params->shared);
 
@@ -16576,14 +16499,6 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         float * s0  = (float *)((char *) src0->data + i1*src0->nb[1]);
         float * s1  = (float *)((char *) src1->data + i1*src1->nb[1]);
 
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            //printf("p[%d] = %f\n", i, p[i]);
-            assert(!isnan(s0[i]));
-            assert(!isnan(s1[i]));
-        }
-#endif
-
         // soft_max
         float max = -INFINITY;
         ggml_vec_max_f32(nc, &max, s0);
@@ -16596,13 +16511,6 @@ static void ggml_compute_forward_cross_entropy_loss_back_f32(
         ggml_vec_add1_f32(nc, ds0, ds0, eps);
         ggml_vec_sub_f32(nc, ds0, ds0, s1);
         ggml_vec_scale_f32(nc, ds0, d[0] / (float) nr);
-
-#ifndef NDEBUG
-        for (int i = 0; i < nc; ++i) {
-            assert(!isnan(ds0[i]));
-            assert(!isinf(ds0[i]));
-        }
-#endif
     }
 }
 

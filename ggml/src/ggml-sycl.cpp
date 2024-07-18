@@ -5070,14 +5070,6 @@ GGML_CALL static ggml_status ggml_backend_sycl_graph_compute(ggml_backend_t back
         if (ggml_is_empty(node) || node->op == GGML_OP_RESHAPE || node->op == GGML_OP_TRANSPOSE || node->op == GGML_OP_VIEW || node->op == GGML_OP_PERMUTE || node->op == GGML_OP_NONE) {
             continue;
         }
-#ifndef NDEBUG
-        assert(node->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device));
-        for (int j = 0; j < GGML_MAX_SRC; j++) {
-            if (node->src[j] != nullptr) {
-                assert(node->src[j]->buffer->buft == ggml_backend_sycl_buffer_type(sycl_ctx->device));
-            }
-        }
-#endif
         bool ok = ggml_sycl_compute_forward(*sycl_ctx, node);
         if (!ok) {
             fprintf(stderr, "%s: error: op not supported %s (%s)\n", __func__, node->name, ggml_op_name(node->op));

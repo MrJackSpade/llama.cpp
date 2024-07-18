@@ -766,10 +766,6 @@ bool ggml_gallocr_reserve_n(ggml_gallocr_t galloc, struct ggml_cgraph * graph, c
 
         // even if there are no tensors allocated in this buffer, we still need to allocate it to initialize views
         if (new_size > cur_size || galloc->buffers[i] == NULL) {
-#ifndef NDEBUG
-            fprintf(stderr, "%s: reallocating %s buffer from size %.02f MiB to %.02f MiB\n", __func__, ggml_backend_buft_name(galloc->bufts[i]), cur_size / 1024.0 / 1024.0, new_size / 1024.0 / 1024.0);
-#endif
-
             ggml_backend_buffer_free(galloc->buffers[i]);
             galloc->buffers[i] = ggml_backend_buft_alloc_buffer(galloc->bufts[i], new_size);
             if (galloc->buffers[i] == NULL) {
@@ -823,16 +819,10 @@ static bool ggml_gallocr_node_needs_realloc(ggml_gallocr_t galloc, struct ggml_t
 
 static bool ggml_gallocr_needs_realloc(ggml_gallocr_t galloc, struct ggml_cgraph * graph) {
     if (galloc->n_nodes != graph->n_nodes) {
-#ifndef NDEBUG
-        fprintf(stderr, "%s: graph has different number of nodes\n", __func__);
-#endif
         return true;
     }
 
     if (galloc->n_leafs != graph->n_leafs) {
-#ifndef NDEBUG
-        fprintf(stderr, "%s: graph has different number of leafs\n", __func__);
-#endif
         return true;
     }
 
@@ -926,9 +916,6 @@ static bool alloc_tensor_range(struct ggml_context * ctx,
         ggml_backend_buffer_t ** buffers, size_t * n_buffers) {
     ggml_backend_buffer_t buffer = ggml_backend_buft_alloc_buffer(buft, size);
     if (buffer == NULL) {
-#ifndef NDEBUG
-        fprintf(stderr, "%s: failed to allocate %s buffer of size %zu\n", __func__, ggml_backend_buft_name(buft), size);
-#endif
         for (size_t i = 0; i < *n_buffers; i++) {
             ggml_backend_buffer_free((*buffers)[i]);
         }
@@ -1008,9 +995,6 @@ ggml_backend_buffer_t ggml_backend_alloc_ctx_tensors_from_buft(struct ggml_conte
     }
 
     if (n_buffers == 0) {
-#ifndef NDEBUG
-        fprintf(stderr, "%s: all tensors in the context are already allocated\n", __func__);
-#endif
         return NULL;
     }
 
