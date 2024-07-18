@@ -1726,12 +1726,8 @@ static bool ggml_backend_sched_alloc_splits(ggml_backend_sched_t sched) {
     if (backend_ids_changed || !ggml_gallocr_alloc_graph(sched->galloc, sched->graph)) {
         // the re-allocation may cause the split inputs to be moved to a different address
         ggml_backend_sched_synchronize(sched);
-#ifndef NDEBUG
-        fprintf(stderr, "%s: failed to allocate graph, reserving\n", __func__);
-#endif
         ggml_gallocr_reserve_n(sched->galloc, sched->graph, sched->node_backend_ids, sched->leaf_backend_ids);
         if (!ggml_gallocr_alloc_graph(sched->galloc, sched->graph)) {
-            fprintf(stderr, "%s: failed to allocate graph\n", __func__);
             return false;
         }
     }

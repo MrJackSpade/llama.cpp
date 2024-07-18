@@ -841,9 +841,6 @@ static bool ggml_gallocr_needs_realloc(ggml_gallocr_t galloc, struct ggml_cgraph
         struct node_alloc * node_alloc = &galloc->node_allocs[i];
 
         if (!ggml_gallocr_node_needs_realloc(galloc, node, &node_alloc->dst)) {
-#ifndef NDEBUG
-            fprintf(stderr, "%s: node %s is not valid\n", __func__, node->name);
-#endif
             return true;
         }
 
@@ -853,9 +850,6 @@ static bool ggml_gallocr_needs_realloc(ggml_gallocr_t galloc, struct ggml_cgraph
                 continue;
             }
             if (!ggml_gallocr_node_needs_realloc(galloc, src, &node_alloc->src[j])) {
-#ifndef NDEBUG
-                fprintf(stderr, "%s: src %d (%s) of node %s is not valid\n", __func__, j, src->name, node->name);
-#endif
                 return true;
             }
         }
@@ -867,16 +861,10 @@ static bool ggml_gallocr_needs_realloc(ggml_gallocr_t galloc, struct ggml_cgraph
 bool ggml_gallocr_alloc_graph(ggml_gallocr_t galloc, struct ggml_cgraph * graph) {
     if (ggml_gallocr_needs_realloc(galloc, graph)) {
         if (galloc->n_buffers == 1) {
-#ifndef NDEBUG
-            fprintf(stderr, "%s: reallocating buffers automatically\n", __func__);
-#endif
             if (!ggml_gallocr_reserve(galloc, graph)) {
                 return false;
             }
         } else {
-#ifndef NDEBUG
-            fprintf(stderr, "%s: cannot reallocate multi buffer graph automatically, call reserve\n", __func__);
-#endif
             return false;
         }
     }
