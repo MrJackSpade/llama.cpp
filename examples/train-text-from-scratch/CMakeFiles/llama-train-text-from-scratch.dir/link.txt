@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG "CMakeFiles/llama-train-text-from-scratch.dir/train-text-from-scratch.cpp.o" -o ../../bin/llama-train-text-from-scratch  -Wl,-rpath,/media/mrjackspade/4TB/llama.cpp/src:/media/mrjackspade/4TB/llama.cpp/ggml/src: ../../common/libcommon.a ../../src/libllama.so ../../ggml/src/libggml.so 

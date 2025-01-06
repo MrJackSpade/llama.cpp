@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG "CMakeFiles/llama-bench-matmult.dir/benchmark-matmult.cpp.o" "../../common/CMakeFiles/build_info.dir/build-info.cpp.o" -o ../../bin/llama-bench-matmult  -Wl,-rpath,/media/mrjackspade/4TB/llama.cpp/src:/media/mrjackspade/4TB/llama.cpp/ggml/src: ../../src/libllama.so ../../ggml/src/libggml.so 

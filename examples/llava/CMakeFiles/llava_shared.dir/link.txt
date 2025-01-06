@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC -O3 -DNDEBUG -shared -Wl,-soname,libllava_shared.so -o libllava_shared.so CMakeFiles/llava.dir/llava.cpp.o CMakeFiles/llava.dir/clip.cpp.o  -Wl,-rpath,/media/mrjackspade/4TB/llama.cpp/src:/media/mrjackspade/4TB/llama.cpp/ggml/src: ../../src/libllama.so ../../ggml/src/libggml.so 
