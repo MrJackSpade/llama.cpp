@@ -46,6 +46,7 @@
 #define LLAMA_STATE_SEQ_VERSION 1
 
 #ifdef __cplusplus
+
 extern "C" {
 #endif
 
@@ -58,6 +59,7 @@ extern "C" {
     struct llama_model;
     struct llama_context;
     struct llama_kv_cache;
+    struct llama_kv_cell;
 
     typedef int32_t llama_pos;
     typedef int32_t llama_token;
@@ -689,6 +691,13 @@ extern "C" {
     LLAMA_API void llama_kv_cache_update(struct llama_context * ctx);
 
     LLAMA_API struct llama_kv_cache* llama_get_kv_cache(struct llama_context* ctx);
+
+    // Get number of elements in the seq_id set for a specific cell
+    LLAMA_API size_t llama_get_kv_cell_seq_id_count(const struct llama_kv_cell* cell);
+
+    // Copy the seq_ids into a pre-allocated array
+    LLAMA_API void llama_get_kv_cell_seq_ids(const struct llama_kv_cell* cell, llama_seq_id* out_array);
+
     //
     // State / sessions
     //

@@ -19226,3 +19226,14 @@ void llama_log_callback_default(ggml_log_level level, const char * text, void * 
     fputs(text, stderr);
     fflush(stderr);
 }
+
+size_t llama_get_kv_cell_seq_id_count(const llama_kv_cell* cell) {
+    return cell->seq_id.size();
+}
+
+void llama_get_kv_cell_seq_ids(const llama_kv_cell* cell, llama_seq_id* out_array) {
+    size_t i = 0;
+    for (const auto& id : cell->seq_id) {
+        out_array[i++] = id;
+    }
+}
