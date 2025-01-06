@@ -17,9 +17,17 @@ For example:
 
 ```bash
 ./bin/llama-export-lora \
-    -m open-llama-3b-v2-q8_0.gguf \
-    -o open-llama-3b-v2-q8_0-english2tokipona-chat.gguf \
-    --lora lora-open-llama-3b-v2-q8_0-english2tokipona-chat-LATEST.bin
+    -m open-llama-3b-v2.gguf \
+    -o open-llama-3b-v2-english2tokipona-chat.gguf \
+    --lora lora-open-llama-3b-v2-english2tokipona-chat-LATEST.gguf
 ```
 
-Multiple LORA adapters can be applied by passing multiple `--lora FNAME` or `--lora-scaled FNAME S` command line parameters.
+Multiple LORA adapters can be applied by passing multiple `--lora FNAME` or `--lora-scaled FNAME S` command line parameters:
+
+```bash
+./bin/llama-export-lora \
+    -m your_base_model.gguf \
+    -o your_merged_model.gguf \
+    --lora-scaled lora_task_A.gguf 0.5 \
+    --lora-scaled lora_task_B.gguf 0.5
+```
