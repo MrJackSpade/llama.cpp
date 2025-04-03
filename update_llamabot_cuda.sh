@@ -13,7 +13,7 @@ cp /media/mrjackspade/4TB/llama.cpp/build/ggml/src/ggml-cuda/libggml-cuda.so /me
 cp /media/mrjackspade/4TB/llama.cpp/build/ggml/src/libggml.so /media/mrjackspade/4TB/LlamaBot/LlamaNative/Binaries/CUDA
 cp /media/mrjackspade/4TB/llama.cpp/build/ggml/src/libggml-cpu.so /media/mrjackspade/4TB/LlamaBot/LlamaNative/Binaries/CUDA
 cp /media/mrjackspade/4TB/llama.cpp/build/src/libllama.so /media/mrjackspade/4TB/LlamaBot/LlamaNative/Binaries/CUDA
-cp /media/mrjackspade/4TB/llama.cpp/build/ggml/src/libggmal-base.so /media/mrjackspade/4TB/LlamaBot/LlamaNative/Binaries/CUDA
+cp /media/mrjackspade/4TB/llama.cpp/build/ggml/src/libggml-base.so /media/mrjackspade/4TB/LlamaBot/LlamaNative/Binaries/CUDA
 
 git commit -m "updating libraries"
 git push

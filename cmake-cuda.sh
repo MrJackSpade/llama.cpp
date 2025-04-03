@@ -10,5 +10,3 @@ cmake -S . -B build/ \
     -DGGML_F16C=ON
 
 cmake --build build/ -- -j 8
-sudo find / | grep libggml.so
-sudo find / | grep libllama.so
