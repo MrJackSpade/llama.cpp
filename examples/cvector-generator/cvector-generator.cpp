@@ -1,7 +1,9 @@
+#include "ggml.h"
+#include "gguf.h"
+
 #include "arg.h"
 #include "common.h"
 #include "llama.h"
-#include "ggml.h"
 #include "pca.hpp"
 #include "mean.hpp"
 
@@ -271,7 +273,9 @@ struct tokenized_prompt {
     size_t max_seq_len;
 
     tokenized_prompt(llama_context * ctx, std::string pos, std::string neg) {
-        const bool add_bos = llama_add_bos_token(llama_get_model(ctx));
+        const llama_model * model = llama_get_model(ctx);
+        const llama_vocab * vocab = llama_model_get_vocab(model);
+        const bool add_bos = llama_vocab_get_add_bos(vocab);
         tokens_pos = common_tokenize(ctx, pos, add_bos, true);
         tokens_neg = common_tokenize(ctx, neg, add_bos, true);
         max_seq_len = std::max(tokens_pos.size(), tokens_neg.size());
@@ -390,6 +394,8 @@ static int prepare_entries(common_params & params, train_context & ctx_train) {
 int main(int argc, char ** argv) {
     common_params params;
 
+    params.out_file = "control_vector.gguf";
+
     if (!common_params_parse(argc, argv, params, LLAMA_EXAMPLE_CVECTOR_GENERATOR, print_usage)) {
         return 1;
     }
@@ -419,8 +425,8 @@ int main(int argc, char ** argv) {
     llama_context * ctx = llama_init.context.get();
 
     // int n_ctx = llama_n_ctx(ctx);
-    int n_layers = llama_n_layer(model);
-    int n_embd = llama_n_embd(model);
+    int n_layers = llama_model_n_layer(model);
+    int n_embd = llama_model_n_embd(model);
 
     // get model hint param (a.k.a model arch name)
     char model_hint[128];
@@ -494,7 +500,7 @@ int main(int argc, char ** argv) {
     }
 
     // write output vectors to gguf
-    export_gguf(ctx_train.v_final, params.cvector_outfile, model_hint);
+    export_gguf(ctx_train.v_final, params.out_file, model_hint);
 
     llama_backend_free();
 

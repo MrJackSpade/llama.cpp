@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 #include <ctime>
+#include <algorithm>
 
 // trim whitespace from the beginning and end of a string
 static std::string trim(const std::string & str) {
@@ -134,6 +135,8 @@ int main(int argc, char ** argv) {
 
     llama_model * model = llama_init.model.get();
     llama_context * ctx = llama_init.context.get();
+
+    const llama_vocab * vocab = llama_model_get_vocab(model);
 
     // load the prompts from an external file if there are any
     if (params.prompt.empty()) {
@@ -358,7 +361,7 @@ int main(int argc, char ** argv) {
                 //        client.id, client.seq_id, id, client.n_decoded, client.i_batch, token_str.c_str());
 
                 if (client.n_decoded > 2 &&
-                        (llama_token_is_eog(model, id) ||
+                        (llama_vocab_is_eog(vocab, id) ||
                          (params.n_predict > 0 && client.n_decoded + client.n_prompt >= params.n_predict) ||
                          client.response.find("User:") != std::string::npos ||
                          client.response.find('\n') != std::string::npos)) {

@@ -104,7 +104,16 @@
         },
         {
             "name": "x64-windows-msvc+static+cuda-release",
-            "inherits": [ "release", "reldbg", "static" ],
+            "inherits": [ "release", "static" ],
+            "cacheVariables": {
+                "BUILD_SHARED_LIBS": "ON",
+                "LLAMA_CUDA": "ON",
+                "GGML_CUDA": "ON"
+            }
+        },
+        {
+            "name": "x64-windows-msvc+static+cuda-reldbg",
+            "inherits": [ "reldbg", "static" ],
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON",
                 "LLAMA_CUDA": "ON",

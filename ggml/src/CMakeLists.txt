@@ -93,12 +93,18 @@ endif()
 
 if (GGML_CCACHE)
     find_program(GGML_CCACHE_FOUND ccache)
+    find_program(GGML_SCCACHE_FOUND sccache)
 
-    if (GGML_CCACHE_FOUND)
+    if (GGML_CCACHE_FOUND OR GGML_SCCACHE_FOUND)
+        if(GGML_CCACHE_FOUND)
+            set(GGML_CCACHE_VARIANT ccache)
+        else()
+            set(GGML_CCACHE_VARIANT sccache)
+        endif()
         # TODO: should not be set globally
-        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+        set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${GGML_CCACHE_VARIANT}")
         set(ENV{CCACHE_SLOPPINESS} time_macros)
-        message(STATUS "ccache found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
+        message(STATUS "${GGML_CCACHE_VARIANT} found, compilation results will be cached. Disable with GGML_CCACHE=OFF.")
     else()
         message(STATUS "Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF")
     endif ()
@@ -208,6 +214,7 @@ add_library(ggml-base
             ../include/ggml-backend.h
             ../include/ggml-cpp.h
             ../include/ggml-opt.h
+            ../include/gguf.h
             ggml.c
             ggml-alloc.c
             ggml-backend.cpp
@@ -215,9 +222,13 @@ add_library(ggml-base
             ggml-threading.cpp
             ggml-threading.h
             ggml-quants.c
-            ggml-quants.h)
+            ggml-quants.h
+            gguf.cpp)
 
 target_include_directories(ggml-base PRIVATE .)
+if (GGML_BACKEND_DL)
+    target_compile_definitions(ggml-base PUBLIC GGML_BACKEND_DL)
+endif()
 
 add_library(ggml
             ggml-backend-reg.cpp)
@@ -225,7 +236,7 @@ add_library(ggml
 target_link_libraries(ggml PUBLIC ggml-base)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    target_link_libraries(ggml PRIVATE dl)
+    target_link_libraries(ggml PRIVATE dl stdc++fs)
 endif()
 
 function(ggml_add_backend_library backend)
@@ -248,6 +259,17 @@ function(ggml_add_backend_library backend)
         target_compile_definitions(${backend} PRIVATE GGML_BACKEND_BUILD)
         target_compile_definitions(${backend} PUBLIC  GGML_BACKEND_SHARED)
     endif()
+
+    if(NOT GGML_AVAILABLE_BACKENDS)
+        set(GGML_AVAILABLE_BACKENDS "${backend}"
+            CACHE INTERNAL "List of backends for cmake package")
+    else()
+        list(FIND GGML_AVAILABLE_BACKENDS "${backend}" has_backend)
+        if(has_backend EQUAL -1)
+            set(GGML_AVAILABLE_BACKENDS "${GGML_AVAILABLE_BACKENDS};${backend}"
+                CACHE INTERNAL "List of backends for cmake package")
+        endif()
+    endif()
 endfunction()
 
 function(ggml_add_backend backend)
@@ -267,7 +289,7 @@ function(ggml_add_cpu_backend_variant tag_name)
     set(GGML_CPU_TAG_NAME ${tag_name})
     # other: OPENMP LLAMAFILE CPU_HBM
     foreach (feat NATIVE
-                  AVX AVX2 AVX_VNNI FMA F16C
+                  AVX AVX2 BMI2 AVX_VNNI FMA F16C
                   AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16
                   AMX_TILE AMX_INT8 AMX_BF16)
         set(GGML_${feat} OFF)
@@ -287,15 +309,15 @@ if (GGML_CPU_ALL_VARIANTS)
         message(FATAL_ERROR "GGML_CPU_ALL_VARIANTS requires GGML_BACKEND_DL")
     endif()
     ggml_add_cpu_backend_variant(sandybridge    AVX)
-    ggml_add_cpu_backend_variant(haswell        AVX F16C AVX2 FMA)
-    ggml_add_cpu_backend_variant(skylakex       AVX F16C AVX2 FMA AVX512)
-    ggml_add_cpu_backend_variant(icelake        AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI)
-    ggml_add_cpu_backend_variant(alderlake      AVX F16C AVX2 FMA AVX_VNNI)
+    ggml_add_cpu_backend_variant(haswell        AVX F16C AVX2 BMI2 FMA)
+    ggml_add_cpu_backend_variant(skylakex       AVX F16C AVX2 BMI2 FMA AVX512)
+    ggml_add_cpu_backend_variant(icelake        AVX F16C AVX2 BMI2 FMA AVX512 AVX512_VBMI AVX512_VNNI)
+    ggml_add_cpu_backend_variant(alderlake      AVX F16C AVX2 BMI2 FMA AVX_VNNI)
     if (NOT MSVC)
         # MSVC doesn't support AMX
-        ggml_add_cpu_backend_variant(sapphirerapids AVX F16C AVX2 FMA AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8)
+        ggml_add_cpu_backend_variant(sapphirerapids AVX F16C AVX2 BMI2 FMA AVX512 AVX512_VBMI AVX512_VNNI AVX512_BF16 AMX_TILE AMX_INT8)
     endif()
-else ()
+elseif (GGML_CPU)
     ggml_add_cpu_backend_variant_impl("")
 endif()
 
