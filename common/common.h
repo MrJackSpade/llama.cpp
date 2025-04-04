@@ -96,6 +96,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_XTC         = 8,
     COMMON_SAMPLER_TYPE_INFILL      = 9,
     COMMON_SAMPLER_TYPE_PENALTIES   = 10,
+    COMMON_SAMPLER_TYPE_POWER_LAW   = 11
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -151,13 +152,22 @@ struct common_params_sampling {
     float   dry_base           = 1.75f; // 0.0 = disabled;      multiplier * base ^ (length of sequence before token - allowed length)
     int32_t dry_allowed_length = 2;     // tokens extending repetitions beyond this receive penalty
     int32_t dry_penalty_last_n = -1;    // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
-    int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
+    int32_t mirostat           = 3;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   top_n_sigma        = -1.00f;// -1.0 = disabled
     float   mirostat_tau       = 5.00f; // target entropy
     float   mirostat_eta       = 0.10f; // learning rate
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
     bool    timing_per_token   = false;
+    float   power_law_target     = 0.6f;  // target for power law sampling
+    float   power_law_min_target = 0.03f;      // minimum target for power law sampling
+    float   power_law_max_target = 1.0f;       // maximum target for power law sampling
+    float   power_law_width      = 0.2f;       // distribution width for power law sampling
+    float   power_law_tail_heaviness = 4.0f;   // tail heaviness for power law sampling
+    float   power_law_min_p = 0.03f;           // tail truncation for power law sampling
+
+    float   power_law_peak_value     = 12.0f;  // peak logit value for power law sampling
+    size_t  power_law_queue_size     = 10;     // queue size for power law sampling
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 
@@ -562,6 +572,7 @@ struct llama_model * common_load_model_from_hf(
 std::pair<std::string, std::string> common_get_hf_file(
     const std::string & hf_repo_with_tag,
     const std::string & hf_token);
+
 
 // clear LoRA adapters from context, then apply new list of adapters
 void common_set_adapter_lora(struct llama_context * ctx, std::vector<common_adapter_lora_info> & lora);

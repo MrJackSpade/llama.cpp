@@ -3,7 +3,7 @@
 #include "llama-impl.h"
 #include "llama-vocab.h"
 #include "llama-grammar.h"
-
+#include <cstdio>
 #include <algorithm>
 #include <cassert>
 #include <cfloat>
@@ -16,6 +16,7 @@
 #include <random>
 #include <unordered_map>
 #include <stdexcept>
+
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 template<typename T>
@@ -2554,4 +2555,197 @@ void llama_perf_sampler_reset(struct llama_sampler * chain) {
     auto * ctx = (struct llama_sampler_chain *) chain->ctx;
 
     ctx->t_sample_us = ctx->n_sample = 0;
+}
+
+
+// power law targeted sampler
+
+struct llama_sampler_power_law {
+    const uint32_t seed;
+    uint32_t       seed_cur;
+
+    const float target;
+    const float min_target;
+    const float max_target;
+    const float width;
+    const float tail_heaviness;
+    const float peak_logit_value;
+    const float min_p;
+
+    float cur_target;
+
+    // Queue for tracking recent tokens entropy
+    std::vector<float> token_probs;
+    size_t             queue_idx;
+    size_t             queue_size;
+
+    std::mt19937 rng;
+};
+
+static const char * llama_sampler_power_law_name(const struct llama_sampler * /*smpl*/) {
+    return "power-law";
+}
+
+
+static void llama_sampler_power_law_apply(struct llama_sampler * smpl, llama_token_data_array * cur_p) {
+    auto * ctx = (llama_sampler_power_law *) smpl->ctx;
+
+    // Apply softmax to get probabilities
+    llama_sampler_softmax_impl(cur_p);
+
+    // Make a copy of the original data before any modifications
+    std::vector<llama_token_data> original_data(cur_p->data, cur_p->data + cur_p->size);
+
+    // Calculate the next target value based on history
+    float  sum_excluding_first = 0.0f;
+    size_t count               = 0;
+
+    // Skip the queue_idx and sum the rest
+    for (size_t i = 0; i < ctx->token_probs.size(); i++) {
+        if (ctx->token_probs[i] > 0.0f && i != ctx->queue_idx) {
+            sum_excluding_first += ctx->token_probs[i];
+            count++;
+        }
+    }
+
+    // Calculate target for this step
+    if (count > 0) {
+        ctx->cur_target = (ctx->target * ctx->queue_size) - sum_excluding_first;
+    } else {
+        ctx->cur_target = ctx->target;
+    }
+
+    if (ctx->cur_target > ctx->max_target) {
+        ctx->cur_target = ctx->max_target;
+    } else if (ctx->cur_target < ctx->min_target) {
+        ctx->cur_target = ctx->min_target;
+    }
+
+    // First, find the closest token to target (for edge case when width is near zero)
+    float min_distance      = FLT_MAX;
+    int   closest_token_idx = -1;
+
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        float distance = fabsf(cur_p->data[i].p - ctx->cur_target);
+        if (distance < min_distance) {
+            min_distance      = distance;
+            closest_token_idx = i;
+        }
+    }
+
+    // Apply power law distribution based on distance from target
+    for (size_t i = 0; i < cur_p->size; ++i) {
+        // truncate low-probability tokens, or else the tail will be too long
+        if (cur_p->data[i].p < ctx->min_p) {
+            cur_p->data[i].logit = -100;
+            continue;
+        }
+
+        if (ctx->width <= 1e-6f) {  // Handle case where width is effectively zero
+            cur_p->data[i].logit = (int) i == closest_token_idx ? ctx->peak_logit_value : -100.0f;
+        } else {
+            float distance            = fabsf(cur_p->data[i].p - ctx->cur_target);
+            float normalized_distance = distance / std::max(0.001f, ctx->width);
+            cur_p->data[i].logit      = ctx->peak_logit_value / (1.0f + powf(normalized_distance, ctx->tail_heaviness));
+        }
+    }
+
+    cur_p->sorted = false;
+
+    //softmax again
+    llama_sampler_softmax_impl(cur_p);
+
+    // Sample using the modified logits
+    const int idx   = llama_sample_dist(cur_p, ctx->rng);
+    cur_p->selected = idx;
+
+    // Get the selected token
+    llama_token selected_token = cur_p->data[idx].id;
+
+    // Find the original probability for this token in the original data
+    float original_prob = 0.0f;
+    for (size_t i = 0; i < original_data.size(); ++i) {
+        if (original_data[i].id == selected_token) {
+            llama_token_data token_data = original_data[i];
+            original_prob               = token_data.p;
+            break;
+        }
+    }
+
+    // Store the original probability for history
+    ctx->token_probs[ctx->queue_idx] = original_prob;
+    ctx->queue_idx                   = (ctx->queue_idx + 1) % ctx->queue_size;
+}
+
+static struct llama_sampler * llama_sampler_power_law_clone(const struct llama_sampler * smpl) {
+    const auto * ctx = (const llama_sampler_power_law *) smpl->ctx;
+
+    auto * result = llama_sampler_init_power_law(ctx->seed, ctx->target, ctx->min_target, ctx->max_target, ctx->width,
+                                                 ctx->tail_heaviness, ctx->peak_logit_value, ctx->queue_size, ctx->min_p);
+
+    // Copy the state
+    {
+        auto * result_ctx = (llama_sampler_power_law *) result->ctx;
+
+        result_ctx->cur_target  = ctx->cur_target;
+        result_ctx->token_probs = ctx->token_probs;
+        result_ctx->queue_idx   = ctx->queue_idx;
+        result_ctx->rng         = ctx->rng;
+    }
+
+    return result;
+}
+
+static void llama_sampler_power_law_reset(struct llama_sampler * smpl) {
+    auto * ctx = (llama_sampler_power_law *) smpl->ctx;
+
+    ctx->cur_target = ctx->target;
+    ctx->seed_cur   = get_rng_seed(ctx->seed);
+    ctx->rng.seed(ctx->seed_cur);
+
+    // Reset history
+    for (size_t i = 0; i < ctx->queue_size; ++i) {
+        ctx->token_probs[i] = 0.0f;
+    }
+    ctx->queue_idx = 0;
+}
+
+static void llama_sampler_power_law_free(struct llama_sampler * smpl) {
+    delete (llama_sampler_power_law *) smpl->ctx;
+}
+
+static struct llama_sampler_i llama_sampler_power_law_i = {
+    /* .name   = */ llama_sampler_power_law_name,
+    /* .accept = */ nullptr,
+    /* .apply  = */ llama_sampler_power_law_apply,
+    /* .reset  = */ llama_sampler_power_law_reset,
+    /* .clone  = */ llama_sampler_power_law_clone,
+    /* .free   = */ llama_sampler_power_law_free,
+};
+
+struct llama_sampler * llama_sampler_init_power_law(uint32_t seed, float target, float min_target, float max_target,
+                                                    float width, float tail_heaviness, float peak_logit_value,
+                                                    size_t queue_size, float min_p) {
+
+    auto   seed_cur = get_rng_seed(seed);
+    auto * result   = llama_sampler_init(
+        /* .iface = */ &llama_sampler_power_law_i,
+        /* .ctx   = */ new llama_sampler_power_law{
+            /* .seed            = */ seed,
+            /* .seed_cur        = */ seed_cur,
+            /* .target          = */ target,
+            /* .min_target      = */ min_target,
+            /* .max_target      = */ max_target,
+            /* .width           = */ width,
+            /* .tail_heaviness  = */ tail_heaviness,
+            /* .peak_logit_value= */ peak_logit_value,
+            /* .min_p          =  */ min_p,
+            /* .cur_target      = */ target,
+            /* .token_probs     = */ std::vector<float>(queue_size, 0.0f),
+            /* .queue_idx       = */ 0,
+            /* .queue_size      = */ queue_size,
+            /* .rng             = */ std::mt19937(seed_cur),
+        });
+
+    return result;
 }

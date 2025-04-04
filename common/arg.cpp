@@ -1216,7 +1216,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
     add_opt(common_arg(
         {"--mirostat"}, "N",
         string_format("use Mirostat sampling.\nTop K, Nucleus and Locally Typical samplers are ignored if used.\n"
-        "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0)", params.sampling.mirostat),
+        "(default: %d, 0 = disabled, 1 = Mirostat, 2 = Mirostat 2.0, 3 = Power Law)", params.sampling.mirostat),
         [](common_params & params, int value) {
             params.sampling.mirostat = value;
         }
@@ -2602,5 +2602,61 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
         }
     ).set_examples({LLAMA_EXAMPLE_SERVER}));
 
+    add_opt(common_arg({ "--power-law-target" }, "N",
+                       string_format("target for power law sampling (default: %.1f)", 0.6f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_target = std::stof(value);
+                       })
+                .set_sparam());
+
+    add_opt(common_arg({ "--power-law-min-target" }, "N",
+                       string_format("minimum target for power law sampling (default: %.2f)", 0.03f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_min_target = std::stof(value);
+                       })
+                .set_sparam());
+
+    add_opt(common_arg({ "--power-law-max-target" }, "N",
+                       string_format("maximum target for power law sampling (default: %.1f)", 1.0f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_max_target = std::stof(value);
+                       })
+                .set_sparam());
+
+    add_opt(common_arg({ "--power-law-width" }, "N",
+                       string_format("distribution width for power law sampling (default: %.1f)", 0.2f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_width = std::stof(value);
+                       })
+                .set_sparam());
+
+    add_opt(common_arg({ "--power-law-tail-heaviness" }, "N",
+                       string_format("tail heaviness for power law sampling (default: %.1f)", 4.0f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_tail_heaviness = std::stof(value);
+                       })
+                .set_sparam());
+
+        add_opt(common_arg({ "--power-law-min-p" }, "N",
+                       string_format("Trail truncation for power law sampling (default: %.1f)", 0.03f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_min_p = std::stof(value);
+                       })
+                .set_sparam());
+
+    add_opt(common_arg({ "--power-law-peak-value" }, "N",
+                       string_format("peak logit value for power law sampling (default: %.1f)", 12.0f),
+                       [](common_params & params, const std::string & value) {
+                           params.sampling.power_law_peak_value = std::stof(value);
+                       })
+                .set_sparam());
+
+        add_opt(common_arg({ "--power-law-queue-size" }, "N",
+                       string_format("queue size for power law sampling (default: %.1f)", 10),
+                       [](common_params & params, int value) {
+                           params.sampling.power_law_queue_size = value;
+                       })
+                .set_sparam());
+    //power_law_queue_size
     return ctx_arg;
 }

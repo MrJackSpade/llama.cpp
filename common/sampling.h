@@ -105,3 +105,8 @@ std::vector<enum common_sampler_type> common_sampler_types_from_chars(const std:
 
 llama_sampler * llama_sampler_init_llg(const llama_vocab * vocab,
                 const char * grammar_kind, const char * grammar_data);
+
+// Add function declaration
+struct llama_sampler * llama_sampler_init_power_law(uint32_t seed, float target, float min_target, float max_target,
+                                                    float width, float tail_heaviness, float peak_logit_value,
+                                                    size_t queue_size, float min_p);

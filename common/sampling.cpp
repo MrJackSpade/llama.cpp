@@ -280,6 +280,13 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
         llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
+    } else if (params.mirostat == 3) {
+        // Add the power law targeted sampler when mirostat == 3
+        llama_sampler_chain_add(result->chain, llama_sampler_init_power_law(
+                                                   params.seed, params.power_law_target, params.power_law_min_target,
+                                                   params.power_law_max_target, params.power_law_width,
+                                                   params.power_law_tail_heaviness, params.power_law_peak_value,
+                                                   params.power_law_queue_size, params.power_law_min_p));
     } else {
         GGML_ASSERT(false && "unknown mirostat version");
     }
@@ -477,6 +484,8 @@ char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_XTC:         return 'x';
         case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
         case COMMON_SAMPLER_TYPE_PENALTIES:   return 'e';
+        case COMMON_SAMPLER_TYPE_POWER_LAW:   return 'w';  // Add this new mapping
+
         default : return '?';
     }
 }
@@ -492,35 +501,38 @@ std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
         case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
         case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
         case COMMON_SAMPLER_TYPE_PENALTIES:   return "penalties";
+        case COMMON_SAMPLER_TYPE_POWER_LAW:   return "power_law";  // Add this new mapping
+
         default : return "";
     }
 }
 
 std::vector<common_sampler_type> common_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
-    std::unordered_map<std::string, common_sampler_type> sampler_canonical_name_map {
-        { "dry",         COMMON_SAMPLER_TYPE_DRY },
-        { "top_k",       COMMON_SAMPLER_TYPE_TOP_K },
-        { "top_p",       COMMON_SAMPLER_TYPE_TOP_P },
-        { "typ_p",       COMMON_SAMPLER_TYPE_TYPICAL_P },
-        { "min_p",       COMMON_SAMPLER_TYPE_MIN_P },
+    // Update the sample name maps
+    std::unordered_map<std::string, common_sampler_type> sampler_canonical_name_map{
+        { "dry",         COMMON_SAMPLER_TYPE_DRY         },
+        { "top_k",       COMMON_SAMPLER_TYPE_TOP_K       },
+        { "top_p",       COMMON_SAMPLER_TYPE_TOP_P       },
+        { "typ_p",       COMMON_SAMPLER_TYPE_TYPICAL_P   },
+        { "min_p",       COMMON_SAMPLER_TYPE_MIN_P       },
         { "temperature", COMMON_SAMPLER_TYPE_TEMPERATURE },
-        { "xtc",         COMMON_SAMPLER_TYPE_XTC },
-        { "infill",      COMMON_SAMPLER_TYPE_INFILL },
-        { "penalties",   COMMON_SAMPLER_TYPE_PENALTIES },
+        { "xtc",         COMMON_SAMPLER_TYPE_XTC         },
+        { "infill",      COMMON_SAMPLER_TYPE_INFILL      },
+        { "penalties",   COMMON_SAMPLER_TYPE_PENALTIES   },
+        { "power_law",   COMMON_SAMPLER_TYPE_POWER_LAW   }, // Add this mapping
     };
 
-    // since samplers names are written multiple ways
-    // make it ready for both system names and input names
-    std::unordered_map<std::string, common_sampler_type> sampler_alt_name_map {
-        { "top-k",       COMMON_SAMPLER_TYPE_TOP_K },
-        { "top-p",       COMMON_SAMPLER_TYPE_TOP_P },
-        { "nucleus",     COMMON_SAMPLER_TYPE_TOP_P },
-        { "typical-p",   COMMON_SAMPLER_TYPE_TYPICAL_P },
-        { "typical",     COMMON_SAMPLER_TYPE_TYPICAL_P },
-        { "typ-p",       COMMON_SAMPLER_TYPE_TYPICAL_P },
-        { "typ",         COMMON_SAMPLER_TYPE_TYPICAL_P },
-        { "min-p",       COMMON_SAMPLER_TYPE_MIN_P },
-        { "temp",        COMMON_SAMPLER_TYPE_TEMPERATURE },
+    std::unordered_map<std::string, common_sampler_type> sampler_alt_name_map{
+        { "top-k",     COMMON_SAMPLER_TYPE_TOP_K       },
+        { "top-p",     COMMON_SAMPLER_TYPE_TOP_P       },
+        { "nucleus",   COMMON_SAMPLER_TYPE_TOP_P       },
+        { "typical-p", COMMON_SAMPLER_TYPE_TYPICAL_P   },
+        { "typical",   COMMON_SAMPLER_TYPE_TYPICAL_P   },
+        { "typ-p",     COMMON_SAMPLER_TYPE_TYPICAL_P   },
+        { "typ",       COMMON_SAMPLER_TYPE_TYPICAL_P   },
+        { "min-p",     COMMON_SAMPLER_TYPE_MIN_P       },
+        { "temp",      COMMON_SAMPLER_TYPE_TEMPERATURE },
+        { "power-law", COMMON_SAMPLER_TYPE_POWER_LAW   }, // Add this mapping
     };
 
     std::vector<common_sampler_type> samplers;

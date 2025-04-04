@@ -30,3 +30,8 @@ struct llama_sampler * llama_sampler_init_dry_testing(
                          int32_t   dry_allowed_length,
                          int32_t   dry_penalty_last_n,
   const std::vector<std::vector<llama_token>>& seq_breakers);
+
+// Add function declaration
+LLAMA_API struct llama_sampler * llama_sampler_init_power_law(uint32_t seed, float target, float min_target,
+                                                              float max_target, float width, float tail_heaviness,
+                                                              float peak_logit_value, size_t queue_size, float min_p);
