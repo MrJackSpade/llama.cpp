@@ -2631,7 +2631,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                 .set_sparam());
 
     add_opt(common_arg({ "--power-law-tail-heaviness" }, "N",
-                       string_format("tail heaviness for power law sampling (default: %.1f)", 4.0f),
+                       string_format("tail heaviness for power law sampling (default: %.1f)", 3.0f),
                        [](common_params & params, const std::string & value) {
                            params.sampling.power_law_tail_heaviness = std::stof(value);
                        })
@@ -2645,7 +2645,7 @@ common_params_context common_params_parser_init(common_params & params, llama_ex
                 .set_sparam());
 
     add_opt(common_arg({ "--power-law-peak-value" }, "N",
-                       string_format("peak logit value for power law sampling (default: %.1f)", 12.0f),
+                       string_format("peak logit value for power law sampling (default: %.1f)", 3.0f),
                        [](common_params & params, const std::string & value) {
                            params.sampling.power_law_peak_value = std::stof(value);
                        })

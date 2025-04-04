@@ -163,10 +163,10 @@ struct common_params_sampling {
     float   power_law_min_target = 0.03f;      // minimum target for power law sampling
     float   power_law_max_target = 1.0f;       // maximum target for power law sampling
     float   power_law_width      = 0.2f;       // distribution width for power law sampling
-    float   power_law_tail_heaviness = 4.0f;   // tail heaviness for power law sampling
+    float   power_law_tail_heaviness = 3.0f;   // tail heaviness for power law sampling
     float   power_law_min_p = 0.03f;           // tail truncation for power law sampling
 
-    float   power_law_peak_value     = 12.0f;  // peak logit value for power law sampling
+    float   power_law_peak_value     = 3.0f;  // peak logit value for power law sampling
     size_t  power_law_queue_size     = 10;     // queue size for power law sampling
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
