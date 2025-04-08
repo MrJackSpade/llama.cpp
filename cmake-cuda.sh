@@ -7,6 +7,7 @@ cmake -S . -B build/ \
     -DGGML_AVX512_VBMI=ON \
     -DGGML_AVX512_VNNI=ON \
     -DGGML_FMA=ON \
-    -DGGML_F16C=ON
+    -DGGML_F16C=ON \
+    -DLLAMA_CURL=OFF
 
 cmake --build build/ -- -j 8
