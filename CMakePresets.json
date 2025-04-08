@@ -108,7 +108,8 @@
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON",
                 "LLAMA_CUDA": "ON",
-                "GGML_CUDA": "ON"
+                "GGML_CUDA": "ON",
+                "LLAMA_CURL": "OFF"
             }
         },
         {
@@ -117,7 +118,8 @@
             "cacheVariables": {
                 "BUILD_SHARED_LIBS": "ON",
                 "LLAMA_CUDA": "ON",
-                "GGML_CUDA": "ON"
+                "GGML_CUDA": "ON",
+                "LLAMA_CURL": "OFF"
             }
         },
         {
