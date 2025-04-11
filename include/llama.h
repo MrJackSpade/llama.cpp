@@ -730,6 +730,10 @@ extern "C" {
             struct llama_context * ctx,
                      llama_seq_id   seq_id);
 
+    LLAMA_API void * llama_create_tensor_buffer_type_overrides(const char * overrides_str);
+
+    LLAMA_API void llama_free_tensor_buffer_type_overrides(void * overrides_ptr);
+
     // Defragment the KV cache
     // This will be applied:
     //   - lazily on next llama_decode()
