@@ -356,3 +356,157 @@ const char * llama_print_system_info(void) {
     return s.c_str();
 }
 
+void * llama_create_tensor_buffer_type_overrides(const char * overrides_str) {
+    fprintf(stderr, "DEBUG: Creating tensor buffer type overrides for: '%s'\n", overrides_str);
+
+    // First, count how many overrides we have
+    std::string value(overrides_str);
+    size_t      override_count = 1;  // Start with 1 for the last part
+    for (size_t i = 0; i < value.length(); i++) {
+        if (value[i] == ',') {
+            override_count++;
+        }
+    }
+
+    fprintf(stderr, "DEBUG: Estimated %zu overrides\n", override_count);
+
+    // Need one extra for the NULL terminator
+    auto * overrides =
+        (llama_model_tensor_buft_override *) malloc((override_count + 1) * sizeof(llama_model_tensor_buft_override));
+
+    if (!overrides) {
+        fprintf(stderr, "DEBUG: Failed to allocate memory for overrides\n");
+        return nullptr;
+    }
+
+    fprintf(stderr, "DEBUG: Allocated override array at %p\n", (void *) overrides);
+
+    // Initialize the structure to zeros
+    memset(overrides, 0, (override_count + 1) * sizeof(llama_model_tensor_buft_override));
+
+    // Match the original code's buffer type discovery
+    std::map<std::string, ggml_backend_buffer_type_t> buft_list;
+    fprintf(stderr, "DEBUG: Building buffer type list\n");
+
+    if (buft_list.empty()) {
+        fprintf(stderr, "DEBUG: Buffer type list is empty, populating\n");
+        // enumerate all the devices and add their buffer types to the list
+        for (size_t i = 0; i < ggml_backend_dev_count(); ++i) {
+            fprintf(stderr, "DEBUG: Getting device %zu\n", i);
+            auto * dev = ggml_backend_dev_get(i);
+            if (!dev) {
+                fprintf(stderr, "DEBUG: Device %zu is NULL\n", i);
+                continue;
+            }
+
+            fprintf(stderr, "DEBUG: Getting buffer type for device %zu\n", i);
+            auto * buft = ggml_backend_dev_buffer_type(dev);
+            if (buft) {
+                const char * name = ggml_backend_buft_name(buft);
+                fprintf(stderr, "DEBUG: Adding buffer type '%s' to list\n", name);
+                buft_list[name] = buft;
+            } else {
+                fprintf(stderr, "DEBUG: Buffer type for device %zu is NULL\n", i);
+            }
+        }
+    }
+
+    fprintf(stderr, "DEBUG: Available buffer types:\n");
+    for (const auto & it : buft_list) {
+        fprintf(stderr, "DEBUG:   %s at %p\n", it.first.c_str(), (void *) it.second);
+    }
+
+    // Use the same string-split implementation
+    std::vector<std::string> parts;
+    size_t                   begin_pos     = 0;
+    size_t                   separator_pos = value.find(',');
+    while (separator_pos != std::string::npos) {
+        std::string part = value.substr(begin_pos, separator_pos - begin_pos);
+        fprintf(stderr, "DEBUG: Found part: '%s'\n", part.c_str());
+        parts.emplace_back(part);
+        begin_pos     = separator_pos + 1;
+        separator_pos = value.find(',', begin_pos);
+    }
+    std::string last_part = value.substr(begin_pos);
+    fprintf(stderr, "DEBUG: Found last part: '%s'\n", last_part.c_str());
+    parts.emplace_back(last_part);
+
+    fprintf(stderr, "DEBUG: Split into %zu parts\n", parts.size());
+
+    // Process exactly as the original code does
+    size_t valid_count = 0;
+    for (size_t i = 0; i < parts.size(); i++) {
+        const auto & override = parts[i];
+        fprintf(stderr, "DEBUG: Processing part %zu: '%s'\n", i, override.c_str());
+
+        std::string::size_type pos = override.find('=');
+        if (pos == std::string::npos) {
+            fprintf(stderr, "DEBUG: No '=' found in part %zu, skipping\n", i);
+            continue;
+        }
+
+        std::string tensor_name = override.substr(0, pos);
+        std::string buffer_type = override.substr(pos + 1);
+        fprintf(stderr, "DEBUG: Tensor name: '%s', Buffer type: '%s'\n", tensor_name.c_str(), buffer_type.c_str());
+
+        if (buft_list.find(buffer_type) == buft_list.end()) {
+            fprintf(stderr, "DEBUG: Buffer type '%s' not found in list\n", buffer_type.c_str());
+            continue;
+        }
+
+        fprintf(stderr, "DEBUG: Found buffer type '%s' in list\n", buffer_type.c_str());
+
+        // Follow the exact same structure as the original
+        fprintf(stderr, "DEBUG: Creating entry at index %zu\n", valid_count);
+
+        fprintf(stderr, "DEBUG: Duplicating tensor name: '%s'\n", tensor_name.c_str());
+        overrides[valid_count].pattern = strdup(tensor_name.c_str());
+        if (!overrides[valid_count].pattern) {
+            fprintf(stderr, "DEBUG: strdup failed for pattern\n");
+            continue;
+        }
+        fprintf(stderr,
+                "DEBUG: Tensor name duplicated to %p: '%s'\n",
+                (void *) overrides[valid_count].pattern,
+                overrides[valid_count].pattern);
+
+        fprintf(stderr, "DEBUG: Setting buffer type to %p\n", (void *) buft_list.at(buffer_type));
+        overrides[valid_count].buft = buft_list.at(buffer_type);
+
+        valid_count++;
+    }
+
+    // Make sure the array is NULL-terminated
+    fprintf(stderr, "DEBUG: Setting NULL terminator at index %zu\n", valid_count);
+    overrides[valid_count].pattern = nullptr;
+    overrides[valid_count].buft    = nullptr;
+
+    fprintf(stderr, "DEBUG: Final override array at %p has %zu entries\n", (void *) overrides, valid_count);
+    for (size_t i = 0; i < valid_count; i++) {
+        fprintf(
+            stderr, "DEBUG: Entry %zu: pattern='%s', buft=%p\n", i, overrides[i].pattern, (void *) overrides[i].buft);
+    }
+
+    return overrides;
+}
+
+void llama_free_tensor_buffer_type_overrides(void * overrides_ptr) {
+    fprintf(stderr, "DEBUG: Freeing tensor buffer type overrides at %p\n", overrides_ptr);
+
+    if (overrides_ptr == nullptr) {
+        fprintf(stderr, "DEBUG: Overrides pointer is NULL, nothing to free\n");
+        return;
+    }
+
+    llama_model_tensor_buft_override * overrides = (llama_model_tensor_buft_override *) overrides_ptr;
+
+    // Free each entry until we hit the NULL terminator
+    for (size_t i = 0; overrides[i].pattern != nullptr; i++) {
+        fprintf(stderr, "DEBUG: Freeing pattern at %p: '%s'\n", (void *) overrides[i].pattern, overrides[i].pattern);
+        free((void *) overrides[i].pattern);
+    }
+
+    fprintf(stderr, "DEBUG: Freeing override array at %p\n", (void *) overrides);
+    free(overrides);
+    fprintf(stderr, "DEBUG: Override array freed\n");
+}
