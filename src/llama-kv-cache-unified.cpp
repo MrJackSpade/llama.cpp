@@ -666,8 +666,6 @@ bool llama_kv_cache_unified::update(llama_context * lctx, bool do_shift, const d
             GGML_ABORT("The current KV cache / model configuration does not support K-shift");
         }
 
-        LLAMA_LOG_DEBUG("%s: applying K-shift\n", __func__);
-
         // apply K-shift if needed
         if (hparams.rope_type != LLAMA_ROPE_TYPE_NONE) {
             ggml_backend_sched_reset(sched);
