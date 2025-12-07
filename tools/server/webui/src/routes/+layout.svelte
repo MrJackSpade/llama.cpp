@@ -1,22 +1,19 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/state';
-	import {
-		ChatSidebar,
-		ConversationTitleUpdateDialog,
-		MaximumContextAlertDialog
-	} from '$lib/components/app';
-	import {
-		activeMessages,
-		isLoading,
-		setTitleUpdateConfirmationCallback
-	} from '$lib/stores/chat.svelte';
+	import { untrack } from 'svelte';
+	import { ChatSidebar, DialogConversationTitleUpdate } from '$lib/components/app';
+	import { isLoading } from '$lib/stores/chat.svelte';
+	import { conversationsStore, activeMessages } from '$lib/stores/conversations.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { serverStore } from '$lib/stores/server.svelte';
-	import { config } from '$lib/stores/settings.svelte';
+	import * as Tooltip from '$lib/components/ui/tooltip';
+	import { isRouterMode, serverStore } from '$lib/stores/server.svelte';
+	import { config, settingsStore } from '$lib/stores/settings.svelte';
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
+	import { modelsStore } from '$lib/stores/models.svelte';
+	import { TOOLTIP_DELAY_DURATION } from '$lib/constants/tooltip-config';
 
 	let { children } = $props();
 
@@ -25,6 +22,7 @@
 	let isNewChatMode = $derived(page.url.searchParams.get('new_chat') === 'true');
 	let showSidebarByDefault = $derived(activeMessages().length > 0 || isLoading());
 	let sidebarOpen = $state(false);
+	let innerHeight = $state<number | undefined>();
 	let chatSidebar:
 		| { activateSearchMode?: () => void; editActiveConversation?: () => void }
 		| undefined = $state();
@@ -47,12 +45,12 @@
 			}
 		}
 
-		if (isCtrlOrCmd && event.shiftKey && event.key === 'o') {
+		if (isCtrlOrCmd && event.shiftKey && event.key === 'O') {
 			event.preventDefault();
 			goto('?new_chat=true#/');
 		}
 
-		if (event.shiftKey && isCtrlOrCmd && event.key === 'e') {
+		if (event.shiftKey && isCtrlOrCmd && event.key === 'E') {
 			event.preventDefault();
 
 			if (chatSidebar?.editActiveConversation) {
@@ -93,9 +91,40 @@
 		}
 	});
 
-	// Initialize server properties on app load
+	// Initialize server properties on app load (run once)
 	$effect(() => {
-		serverStore.fetchServerProps();
+		// Only fetch if we don't already have props
+		if (!serverStore.props) {
+			untrack(() => {
+				serverStore.fetch();
+			});
+		}
+	});
+
+	// Sync settings when server props are loaded
+	$effect(() => {
+		const serverProps = serverStore.props;
+
+		if (serverProps?.default_generation_settings?.params) {
+			settingsStore.syncWithServerDefaults();
+		}
+	});
+
+	// Fetch router models when in router mode (for status and modalities)
+	// Wait for models to be loaded first, run only once
+	let routerModelsFetched = false;
+
+	$effect(() => {
+		const isRouter = isRouterMode();
+		const modelsCount = modelsStore.models.length;
+
+		// Only fetch router models once when we have models loaded and in router mode
+		if (isRouter && modelsCount > 0 && !routerModelsFetched) {
+			routerModelsFetched = true;
+			untrack(() => {
+				modelsStore.fetchRouterModels();
+			});
+		}
 	});
 
 	// Monitor API key changes and redirect to error page if removed or changed when required
@@ -129,48 +158,50 @@
 
 	// Set up title update confirmation callback
 	$effect(() => {
-		setTitleUpdateConfirmationCallback(async (currentTitle: string, newTitle: string) => {
-			return new Promise<boolean>((resolve) => {
-				titleUpdateCurrentTitle = currentTitle;
-				titleUpdateNewTitle = newTitle;
-				titleUpdateResolve = resolve;
-				titleUpdateDialogOpen = true;
-			});
-		});
+		conversationsStore.setTitleUpdateConfirmationCallback(
+			async (currentTitle: string, newTitle: string) => {
+				return new Promise<boolean>((resolve) => {
+					titleUpdateCurrentTitle = currentTitle;
+					titleUpdateNewTitle = newTitle;
+					titleUpdateResolve = resolve;
+					titleUpdateDialogOpen = true;
+				});
+			}
+		);
 	});
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<Tooltip.Provider delayDuration={TOOLTIP_DELAY_DURATION}>
+	<ModeWatcher />
 
-<ModeWatcher />
+	<Toaster richColors />
 
-<Toaster richColors />
+	<DialogConversationTitleUpdate
+		bind:open={titleUpdateDialogOpen}
+		currentTitle={titleUpdateCurrentTitle}
+		newTitle={titleUpdateNewTitle}
+		onConfirm={handleTitleUpdateConfirm}
+		onCancel={handleTitleUpdateCancel}
+	/>
 
-<MaximumContextAlertDialog />
+	<Sidebar.Provider bind:open={sidebarOpen}>
+		<div class="flex h-screen w-full" style:height="{innerHeight}px">
+			<Sidebar.Root class="h-full">
+				<ChatSidebar bind:this={chatSidebar} />
+			</Sidebar.Root>
 
-<ConversationTitleUpdateDialog
-	bind:open={titleUpdateDialogOpen}
-	currentTitle={titleUpdateCurrentTitle}
-	newTitle={titleUpdateNewTitle}
-	onConfirm={handleTitleUpdateConfirm}
-	onCancel={handleTitleUpdateCancel}
-/>
+			<Sidebar.Trigger
+				class="transition-left absolute left-0 z-[900] h-8 w-8 duration-200 ease-linear {sidebarOpen
+					? 'md:left-[var(--sidebar-width)]'
+					: ''}"
+				style="translate: 1rem 1rem;"
+			/>
 
-<Sidebar.Provider bind:open={sidebarOpen}>
-	<div class="flex h-screen w-full">
-		<Sidebar.Root class="h-full">
-			<ChatSidebar bind:this={chatSidebar} />
-		</Sidebar.Root>
+			<Sidebar.Inset class="flex flex-1 flex-col overflow-hidden">
+				{@render children?.()}
+			</Sidebar.Inset>
+		</div>
+	</Sidebar.Provider>
+</Tooltip.Provider>
 
-		<Sidebar.Trigger
-			class="transition-left absolute h-8 w-8 duration-200 ease-linear {sidebarOpen
-				? 'md:left-[var(--sidebar-width)]'
-				: 'left-0'}"
-			style="translate: 1rem 1rem; z-index: 99999;"
-		/>
-
-		<Sidebar.Inset class="flex flex-1 flex-col overflow-hidden">
-			{@render children?.()}
-		</Sidebar.Inset>
-	</div>
-</Sidebar.Provider>
+<svelte:window onkeydown={handleKeydown} bind:innerHeight />
