@@ -2653,7 +2653,7 @@ static const char * llama_sampler_power_law_name(const struct llama_sampler * /*
 }
 
 // Toggle for PowerLawSampler logging
-static const bool ENABLE_POWER_LAW_LOGGING = true;
+static const bool ENABLE_POWER_LAW_LOGGING = false;
 
 static void log_power_law_state(const llama_sampler_power_law * ctx,
                                 float                           target,
