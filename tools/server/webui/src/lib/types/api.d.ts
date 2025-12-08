@@ -144,6 +144,13 @@ export interface ApiLlamaCppServerProps {
 			grammar_lazy: boolean;
 			grammar_triggers: string[];
 			preserved_tokens: number[];
+			power_law_max_target: number;
+			power_law_min_target: number;
+			power_law_target: number;
+			power_law_queue_size: number;
+			power_law_distribution_width: number;
+			power_law_peak_logit_value: number;
+			power_law_tail_heaviness: number;
 			chat_format: string;
 			reasoning_format: string;
 			reasoning_in_content: boolean;
@@ -199,6 +206,14 @@ export interface ApiChatCompletionRequest {
 	xtc_probability?: number;
 	xtc_threshold?: number;
 	typ_p?: number;
+	// PowerLawSampler parameters
+	power_law_max_target?: number;
+	power_law_min_target?: number;
+	power_law_target?: number;
+	power_law_queue_size?: number;
+	power_law_distribution_width?: number;
+	power_law_peak_logit_value?: number;
+	power_law_tail_heaviness?: number;
 	// Penalty parameters
 	repeat_last_n?: number;
 	repeat_penalty?: number;
@@ -287,6 +302,13 @@ export interface ApiSlotData {
 		xtc_probability: number;
 		xtc_threshold: number;
 		typical_p: number;
+		power_law_max_target: number;
+		power_law_min_target: number;
+		power_law_target: number;
+		power_law_queue_size: number;
+		power_law_distribution_width: number;
+		power_law_peak_logit_value: number;
+		power_law_tail_heaviness: number;
 		repeat_last_n: number;
 		repeat_penalty: number;
 		presence_penalty: number;

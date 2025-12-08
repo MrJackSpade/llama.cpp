@@ -17,13 +17,20 @@ export const SETTING_CONFIG_DEFAULT: Record<string, string | number | boolean> =
 	renderUserContentAsMarkdown: false,
 	autoMicOnEmpty: false,
 	// make sure these default values are in sync with `common.h`
-	samplers: 'top_k;typ_p;top_p;min_p;temperature',
+	samplers: 'penalties;min_p;temperature;power_law',
 	temperature: 0.8,
 	dynatemp_range: 0.0,
 	dynatemp_exponent: 1.0,
 	top_k: 40,
-	top_p: 0.95,
+	top_p: 1.0, // Disable Top-P to let Power Law work
 	min_p: 0.05,
+	power_law_max_target: 1.0,
+	power_law_min_target: 0.0,
+	power_law_target: 0.4, // Set a default target derived from common usage
+	power_law_queue_size: 10,
+	power_law_distribution_width: 0.2, // Wider distribution for more variety
+	power_law_peak_logit_value: 3.0,
+	power_law_tail_heaviness: 3.0,
 	xtc_probability: 0.0,
 	xtc_threshold: 0.1,
 	typ_p: 1.0,
@@ -62,6 +69,13 @@ export const SETTING_CONFIG_INFO: Record<string, string> = {
 	top_p: 'Limits tokens to those that together have a cumulative probability of at least p',
 	min_p:
 		'Limits tokens based on the minimum probability for a token to be considered, relative to the probability of the most likely token.',
+	power_law_max_target: 'Maximum target probability for PowerLawSampler.',
+	power_law_min_target: 'Minimum target probability for PowerLawSampler.',
+	power_law_target: 'Base target probability for PowerLawSampler.',
+	power_law_queue_size: 'History size for target probability adjustment in PowerLawSampler.',
+	power_law_distribution_width: 'Width of the distribution for PowerLawSampler.',
+	power_law_peak_logit_value: 'Peak logit modification value for PowerLawSampler.',
+	power_law_tail_heaviness: 'Heaviness of the tail for PowerLawSampler.',
 	xtc_probability:
 		'XTC sampler cuts out top tokens; this parameter controls the chance of cutting tokens at all. 0 disables XTC.',
 	xtc_threshold:

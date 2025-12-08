@@ -1,4 +1,5 @@
 <html>
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
@@ -135,11 +136,13 @@
       display: flex;
       justify-content: flex-end;
     }
+
     .message-controls > div:nth-child(2) {
       display: flex;
       flex-direction: column;
       gap: 0.5em;
     }
+
     .message-controls > div:nth-child(2) > div {
       display: flex;
       margin-left: auto;
@@ -321,6 +324,14 @@
       grammar: '',
       n_probs: 0, // no completion_probabilities,
       min_keep: 0, // min probs from each sampler,
+      // PowerLawSampler
+      power_law_max_target: 1.0,
+      power_law_min_target: 0.0,
+      power_law_target: 0.4,
+      power_law_queue_size: 10,
+      power_law_distribution_width: 0.2,
+      power_law_peak_logit_value: 3.0,
+      power_law_tail_heaviness: 3.0,
       image_data: [],
       cache_prompt: true,
       api_key: ''
@@ -821,8 +832,7 @@
           return html`
           <div>
             <p key=${index}><strong>${template(user)}:</strong> ${message}</p>
-            ${
-              fromBot && ttsVoice.value
+            ${fromBot && ttsVoice.value
               && html`<button disabled=${generating.value} onclick=${e => ttsChatLine(e, index, text)} aria-label=${ttsChatLineActiveIx.value === index ? 'Pause' : 'Play'}>${ ttsChatLineActiveIx.value === index ? '⏸️' : '▶️' }</div>`
             }
           </div>
@@ -1037,6 +1047,16 @@
             </fieldset>
             <fieldset>
               ${IntField({ label: "Min Probabilities from each Sampler", max: 10, min: 0, name: "min_keep", value: params.value.min_keep })}
+            </fieldset>
+            <fieldset>
+              <legend>Power Law Sampler</legend>
+              ${FloatField({ label: "Power Law Max Target", max: 1.0, min: 0.0, name: "power_law_max_target", step: 0.01, value: params.value.power_law_max_target })}
+              ${FloatField({ label: "Power Law Min Target", max: 1.0, min: 0.0, name: "power_law_min_target", step: 0.01, value: params.value.power_law_min_target })}
+              ${FloatField({ label: "Power Law Target", max: 1.0, min: 0.0, name: "power_law_target", step: 0.01, value: params.value.power_law_target })}
+              ${IntField({ label: "Power Law Queue Size", max: 100, min: 1, name: "power_law_queue_size", value: params.value.power_law_queue_size })}
+              ${FloatField({ label: "Power Law Distribution Width", max: 1.0, min: 0.0, name: "power_law_distribution_width", step: 0.01, value: params.value.power_law_distribution_width })}
+              ${FloatField({ label: "Power Law Peak Logit Value", max: 10.0, min: 0.0, name: "power_law_peak_logit_value", step: 0.1, value: params.value.power_law_peak_logit_value })}
+              ${FloatField({ label: "Power Law Tail Heaviness", max: 10.0, min: 0.0, name: "power_law_tail_heaviness", step: 0.1, value: params.value.power_law_tail_heaviness })}
             </fieldset>
             <fieldset>
               <label for="api_key">API Key</label>

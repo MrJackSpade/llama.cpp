@@ -1400,6 +1400,22 @@ class ChatStore {
 			apiOptions.dry_allowed_length = Number(currentConfig.dry_allowed_length);
 		if (hasValue(currentConfig.dry_penalty_last_n))
 			apiOptions.dry_penalty_last_n = Number(currentConfig.dry_penalty_last_n);
+
+		if (hasValue(currentConfig.power_law_max_target))
+			apiOptions.power_law_max_target = Number(currentConfig.power_law_max_target);
+		if (hasValue(currentConfig.power_law_min_target))
+			apiOptions.power_law_min_target = Number(currentConfig.power_law_min_target);
+		if (hasValue(currentConfig.power_law_target))
+			apiOptions.power_law_target = Number(currentConfig.power_law_target);
+		if (hasValue(currentConfig.power_law_queue_size))
+			apiOptions.power_law_queue_size = Number(currentConfig.power_law_queue_size);
+		if (hasValue(currentConfig.power_law_distribution_width))
+			apiOptions.power_law_distribution_width = Number(currentConfig.power_law_distribution_width);
+		if (hasValue(currentConfig.power_law_peak_logit_value))
+			apiOptions.power_law_peak_logit_value = Number(currentConfig.power_law_peak_logit_value);
+		if (hasValue(currentConfig.power_law_tail_heaviness))
+			apiOptions.power_law_tail_heaviness = Number(currentConfig.power_law_tail_heaviness);
+
 		if (currentConfig.samplers) apiOptions.samplers = currentConfig.samplers;
 		if (currentConfig.custom) apiOptions.custom = currentConfig.custom;
 

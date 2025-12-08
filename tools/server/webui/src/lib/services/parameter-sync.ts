@@ -46,6 +46,48 @@ export const SYNCABLE_PARAMETERS: SyncableParameter[] = [
 	{ key: 'xtc_probability', serverKey: 'xtc_probability', type: 'number', canSync: true },
 	{ key: 'xtc_threshold', serverKey: 'xtc_threshold', type: 'number', canSync: true },
 	{ key: 'typ_p', serverKey: 'typ_p', type: 'number', canSync: true },
+	{
+		key: 'power_law_max_target',
+		serverKey: 'power_law_max_target',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_min_target',
+		serverKey: 'power_law_min_target',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_target',
+		serverKey: 'power_law_target',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_queue_size',
+		serverKey: 'power_law_queue_size',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_distribution_width',
+		serverKey: 'power_law_distribution_width',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_peak_logit_value',
+		serverKey: 'power_law_peak_logit_value',
+		type: 'number',
+		canSync: true
+	},
+	{
+		key: 'power_law_tail_heaviness',
+		serverKey: 'power_law_tail_heaviness',
+		type: 'number',
+		canSync: true
+	},
 	{ key: 'repeat_last_n', serverKey: 'repeat_last_n', type: 'number', canSync: true },
 	{ key: 'repeat_penalty', serverKey: 'repeat_penalty', type: 'number', canSync: true },
 	{ key: 'presence_penalty', serverKey: 'presence_penalty', type: 'number', canSync: true },

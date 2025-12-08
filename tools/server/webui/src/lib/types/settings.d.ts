@@ -32,6 +32,14 @@ export interface SettingsChatServiceOptions {
 	xtc_probability?: number;
 	xtc_threshold?: number;
 	typ_p?: number;
+	// PowerLawSampler parameters
+	power_law_max_target?: number;
+	power_law_min_target?: number;
+	power_law_target?: number;
+	power_law_queue_size?: number;
+	power_law_distribution_width?: number;
+	power_law_peak_logit_value?: number;
+	power_law_tail_heaviness?: number;
 	// Penalty parameters
 	repeat_last_n?: number;
 	repeat_penalty?: number;

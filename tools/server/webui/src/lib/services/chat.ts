@@ -75,6 +75,14 @@ export class ChatService {
 			xtc_probability,
 			xtc_threshold,
 			typ_p,
+			// PowerLawSampler parameters
+			power_law_max_target,
+			power_law_min_target,
+			power_law_target,
+			power_law_queue_size,
+			power_law_distribution_width,
+			power_law_peak_logit_value,
+			power_law_tail_heaviness,
 			// Penalty parameters
 			repeat_last_n,
 			repeat_penalty,
@@ -141,6 +149,17 @@ export class ChatService {
 		if (xtc_probability !== undefined) requestBody.xtc_probability = xtc_probability;
 		if (xtc_threshold !== undefined) requestBody.xtc_threshold = xtc_threshold;
 		if (typ_p !== undefined) requestBody.typ_p = typ_p;
+
+		if (power_law_max_target !== undefined) requestBody.power_law_max_target = power_law_max_target;
+		if (power_law_min_target !== undefined) requestBody.power_law_min_target = power_law_min_target;
+		if (power_law_target !== undefined) requestBody.power_law_target = power_law_target;
+		if (power_law_queue_size !== undefined) requestBody.power_law_queue_size = power_law_queue_size;
+		if (power_law_distribution_width !== undefined)
+			requestBody.power_law_distribution_width = power_law_distribution_width;
+		if (power_law_peak_logit_value !== undefined)
+			requestBody.power_law_peak_logit_value = power_law_peak_logit_value;
+		if (power_law_tail_heaviness !== undefined)
+			requestBody.power_law_tail_heaviness = power_law_tail_heaviness;
 
 		if (repeat_last_n !== undefined) requestBody.repeat_last_n = repeat_last_n;
 		if (repeat_penalty !== undefined) requestBody.repeat_penalty = repeat_penalty;

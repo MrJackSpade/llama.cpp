@@ -10,8 +10,7 @@
 
 // the ring buffer works similarly to std::deque, but with a fixed capacity
 // TODO: deduplicate with llama-impl.h
-template<typename T>
-struct ring_buffer {
+template <typename T> struct ring_buffer {
     ring_buffer(size_t cap) : capacity(cap), data(cap) {}
 
     T & front() {
@@ -86,13 +85,9 @@ struct ring_buffer {
         pos = 0;
     }
 
-    bool empty() const {
-        return sz == 0;
-    }
+    bool empty() const { return sz == 0; }
 
-    size_t size() const {
-        return sz;
-    }
+    size_t size() const { return sz; }
 
     size_t capacity = 0;
     size_t sz = 0;
@@ -137,9 +132,7 @@ struct common_sampler {
         cur_p = { cur.data(), cur.size(), -1, false };
     }
 
-    common_time_meas tm() {
-        return common_time_meas(t_total_us, params.no_perf);
-    }
+    common_time_meas tm() { return common_time_meas(t_total_us, params.no_perf); }
 
     mutable int64_t t_total_us = 0;
 };
@@ -150,17 +143,23 @@ std::string common_params_sampling::print() const {
     snprintf(result, sizeof(result),
             "\trepeat_last_n = %d, repeat_penalty = %.3f, frequency_penalty = %.3f, presence_penalty = %.3f\n"
             "\tdry_multiplier = %.3f, dry_base = %.3f, dry_allowed_length = %d, dry_penalty_last_n = %d\n"
-            "\ttop_k = %d, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = %.3f, top_n_sigma = %.3f, temp = %.3f\n"
-            "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f",
-            penalty_last_n, penalty_repeat, penalty_freq, penalty_present,
-            dry_multiplier, dry_base, dry_allowed_length, dry_penalty_last_n,
-            top_k, top_p, min_p, xtc_probability, xtc_threshold, typ_p, top_n_sigma, temp,
-            mirostat, mirostat_eta, mirostat_tau);
+             "\ttop_k = %d, top_p = %.3f, min_p = %.3f, xtc_probability = %.3f, xtc_threshold = %.3f, typical_p = "
+             "%.3f, top_n_sigma = %.3f, temp = %.3f\n"
+             "\tmirostat = %d, mirostat_lr = %.3f, mirostat_ent = %.3f\n"
+             "\tpower_law_max_target = %.3f, power_law_min_target = %.3f, power_law_target = %.3f, "
+             "power_law_queue_size = %d\n"
+             "\tpower_law_dist_width = %.3f, power_law_peak_logit = %.3f, power_law_tail_heaviness = %.3f",
+             penalty_last_n, penalty_repeat, penalty_freq, penalty_present, dry_multiplier, dry_base,
+             dry_allowed_length, dry_penalty_last_n, top_k, top_p, min_p, xtc_probability, xtc_threshold, typ_p,
+             top_n_sigma, temp, mirostat, mirostat_eta, mirostat_tau, power_law_max_target, power_law_min_target,
+             power_law_target, power_law_queue_size, power_law_distribution_width, power_law_peak_logit_value,
+             power_law_tail_heaviness);
 
     return std::string(result);
 }
 
-struct common_sampler * common_sampler_init(const struct llama_model * model, const struct common_params_sampling & params) {
+struct common_sampler * common_sampler_init(const struct llama_model *            model,
+                                            const struct common_params_sampling & params) {
     const llama_vocab * vocab = llama_model_get_vocab(model);
 
     llama_sampler_chain_params lparams = llama_sampler_chain_default_params();
@@ -217,11 +216,10 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
             trigger_patterns_c.push_back(regex.c_str());
         }
 
-        grmr = params.grammar_lazy
-             ? llama_sampler_init_grammar_lazy_patterns(vocab, params.grammar.c_str(), "root",
-                                                        trigger_patterns_c.data(), trigger_patterns_c.size(),
-                                                        trigger_tokens.data(), trigger_tokens.size())
-             :      llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root");
+        grmr = params.grammar_lazy ? llama_sampler_init_grammar_lazy_patterns(
+                                         vocab, params.grammar.c_str(), "root", trigger_patterns_c.data(),
+                                         trigger_patterns_c.size(), trigger_tokens.data(), trigger_tokens.size()) :
+                                     llama_sampler_init_grammar(vocab, params.grammar.c_str(), "root");
         if (!grmr) {
             return nullptr;
         }
@@ -236,11 +234,9 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
         /* .cur_p  = */ {},
     };
 
-    llama_sampler_chain_add(result->chain,
-            llama_sampler_init_logit_bias(
-                llama_vocab_n_tokens(vocab),
-                params.logit_bias.size(),
-                params.logit_bias.data()));
+    llama_sampler_chain_add(
+        result->chain,
+        llama_sampler_init_logit_bias(llama_vocab_n_tokens(vocab), params.logit_bias.size(), params.logit_bias.data()));
 
     if (params.mirostat == 0) {
         for (const auto & cnstr : params.samplers) {
@@ -253,7 +249,11 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                             c_breakers.push_back(str.c_str());
                         }
 
-                        llama_sampler_chain_add(result->chain, llama_sampler_init_dry      (vocab, llama_model_n_ctx_train(model), params.dry_multiplier, params.dry_base, params.dry_allowed_length, params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
+                        llama_sampler_chain_add(
+                            result->chain,
+                            llama_sampler_init_dry(vocab, llama_model_n_ctx_train(model), params.dry_multiplier,
+                                                   params.dry_base, params.dry_allowed_length,
+                                                   params.dry_penalty_last_n, c_breakers.data(), c_breakers.size()));
                     }
                     break;
                 case COMMON_SAMPLER_TYPE_TOP_K:
@@ -269,31 +269,61 @@ struct common_sampler * common_sampler_init(const struct llama_model * model, co
                     llama_sampler_chain_add(result->chain, llama_sampler_init_min_p       (params.min_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_XTC:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_xtc         (params.xtc_probability, params.xtc_threshold, params.min_keep, params.seed));
+                    llama_sampler_chain_add(result->chain,
+                                            llama_sampler_init_xtc(params.xtc_probability, params.xtc_threshold,
+                                                                   params.min_keep, params.seed));
                     break;
                 case COMMON_SAMPLER_TYPE_TYPICAL_P:
                     llama_sampler_chain_add(result->chain, llama_sampler_init_typical     (params.typ_p, params.min_keep));
                     break;
                 case COMMON_SAMPLER_TYPE_TEMPERATURE:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_temp_ext    (params.temp, params.dynatemp_range, params.dynatemp_exponent));
+                    llama_sampler_chain_add(
+                        result->chain,
+                        llama_sampler_init_temp_ext(params.temp, params.dynatemp_range, params.dynatemp_exponent));
                     break;
                 case COMMON_SAMPLER_TYPE_INFILL:
                     llama_sampler_chain_add(result->chain, llama_sampler_init_infill      (vocab));
                     break;
                 case COMMON_SAMPLER_TYPE_PENALTIES:
-                    llama_sampler_chain_add(result->chain, llama_sampler_init_penalties   (params.penalty_last_n, params.penalty_repeat, params.penalty_freq, params.penalty_present));
+                    llama_sampler_chain_add(result->chain,
+                                            llama_sampler_init_penalties(params.penalty_last_n, params.penalty_repeat,
+                                                                         params.penalty_freq, params.penalty_present));
+                    break;
+                case COMMON_SAMPLER_TYPE_POWER_LAW:
+                    llama_sampler_chain_add(
+                        result->chain,
+                        llama_sampler_init_power_law(
+                            params.power_law_max_target, params.power_law_min_target, params.power_law_target,
+                            params.power_law_queue_size, params.power_law_distribution_width,
+                            params.power_law_peak_logit_value, params.power_law_tail_heaviness, params.seed));
                     break;
                 default:
                     GGML_ASSERT(false && "unknown sampler type");
             }
         }
+
+        bool has_power_law = false;
+        for (const auto & cnstr : params.samplers) {
+            if (cnstr == COMMON_SAMPLER_TYPE_POWER_LAW) {
+                has_power_law = true;
+                break;
+            }
+        }
+
+        if (!has_power_law) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_dist(params.seed));
-    } else if (params.mirostat == 1) {
+        }
+    }
+
+    else if (params.mirostat == 1) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(vocab), params.seed, params.mirostat_tau, params.mirostat_eta, 100));
+        llama_sampler_chain_add(
+            result->chain, llama_sampler_init_mirostat(llama_vocab_n_tokens(vocab), params.seed, params.mirostat_tau,
+                                                       params.mirostat_eta, 100));
     } else if (params.mirostat == 2) {
         llama_sampler_chain_add(result->chain, llama_sampler_init_temp(params.temp));
-        llama_sampler_chain_add(result->chain, llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
+        llama_sampler_chain_add(result->chain,
+                                llama_sampler_init_mirostat_v2(params.seed, params.mirostat_tau, params.mirostat_eta));
     } else {
         GGML_ASSERT(false && "unknown mirostat version");
     }
@@ -372,18 +402,25 @@ void common_perf_print(const struct llama_context * ctx, const struct common_sam
 
         LOG_INF("%s:        load time = %10.2f ms\n", __func__, data.t_load_ms);
         LOG_INF("%s: prompt eval time = %10.2f ms / %5d tokens (%8.2f ms per token, %8.2f tokens per second)\n",
-                __func__, data.t_p_eval_ms, data.n_p_eval, data.t_p_eval_ms / data.n_p_eval, 1e3 / data.t_p_eval_ms * data.n_p_eval);
+                __func__, data.t_p_eval_ms, data.n_p_eval, data.t_p_eval_ms / data.n_p_eval,
+                1e3 / data.t_p_eval_ms * data.n_p_eval);
         LOG_INF("%s:        eval time = %10.2f ms / %5d runs   (%8.2f ms per token, %8.2f tokens per second)\n",
-                __func__, data.t_eval_ms, data.n_eval, data.t_eval_ms / data.n_eval, 1e3 / data.t_eval_ms * data.n_eval);
-        LOG_INF("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms), (data.n_p_eval + data.n_eval));
-        LOG_INF("%s: unaccounted time = %10.2f ms / %5.1f %%      (total - sampling - prompt eval - eval) / (total)\n", __func__, t_unacc_ms, t_unacc_pc);
+                __func__, data.t_eval_ms, data.n_eval, data.t_eval_ms / data.n_eval,
+                1e3 / data.t_eval_ms * data.n_eval);
+        LOG_INF("%s:       total time = %10.2f ms / %5d tokens\n", __func__, (t_end_ms - data.t_start_ms),
+                (data.n_p_eval + data.n_eval));
+        LOG_INF("%s: unaccounted time = %10.2f ms / %5.1f %%      (total - sampling - prompt eval - eval) / (total)\n",
+                __func__, t_unacc_ms, t_unacc_pc);
         LOG_INF("%s:    graphs reused = %10d\n", __func__, data.n_reused);
 
         llama_memory_breakdown_print(ctx);
     }
 }
 
-llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_context * ctx, int idx, bool grammar_first) {
+llama_token common_sampler_sample(struct common_sampler * gsmpl,
+                                  struct llama_context *  ctx,
+                                  int                     idx,
+                                  bool                    grammar_first) {
     llama_synchronize(ctx);
 
     // start measuring sampling time after the llama_context synchronization in order to not measure any ongoing async operations
@@ -434,7 +471,11 @@ llama_token common_sampler_sample(struct common_sampler * gsmpl, struct llama_co
     return cur_p.data[cur_p.selected].id;
 }
 
-std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl, struct llama_context * ctx, const std::vector<int> & idxs, const llama_tokens & draft, bool grammar_first) {
+std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler *  gsmpl,
+                                                            struct llama_context *   ctx,
+                                                            const std::vector<int> & idxs,
+                                                            const llama_tokens &     draft,
+                                                            bool                     grammar_first) {
     GGML_ASSERT(idxs.size() == draft.size() + 1 && "idxs.size() must be draft.size() + 1");
 
     std::vector<llama_token> result;
@@ -464,7 +505,10 @@ std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sample
     return result;
 }
 
-std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl, struct llama_context * ctx, const llama_tokens & draft, bool grammar_first) {
+std::vector<llama_token> common_sampler_sample_and_accept_n(struct common_sampler * gsmpl,
+                                                            struct llama_context *  ctx,
+                                                            const llama_tokens &    draft,
+                                                            bool                    grammar_first) {
     std::vector<int> idxs(draft.size() + 1);
     for (size_t i = 0; i < idxs.size(); ++i) {
         idxs[i] = i;
@@ -488,9 +532,8 @@ llama_token_data_array * common_sampler_get_candidates(struct common_sampler * g
         // remember the selected token before sorting
         const llama_token id = res->data[res->selected].id;
 
-        std::sort(res->data, res->data + res->size, [](const llama_token_data & a, const llama_token_data & b) {
-            return a.p > b.p;
-        });
+        std::sort(res->data, res->data + res->size,
+                  [](const llama_token_data & a, const llama_token_data & b) { return a.p > b.p; });
 
         // restore the selected token after sorting
         for (size_t i = 0; i < res->size; ++i) {
@@ -544,37 +587,64 @@ std::string common_sampler_prev_str(common_sampler * gsmpl, llama_context * ctx_
 
 char common_sampler_type_to_chr(enum common_sampler_type cnstr) {
     switch (cnstr) {
-        case COMMON_SAMPLER_TYPE_DRY:         return 'd';
-        case COMMON_SAMPLER_TYPE_TOP_K:       return 'k';
-        case COMMON_SAMPLER_TYPE_TYPICAL_P:   return 'y';
-        case COMMON_SAMPLER_TYPE_TOP_P:       return 'p';
-        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA: return 's';
-        case COMMON_SAMPLER_TYPE_MIN_P:       return 'm';
-        case COMMON_SAMPLER_TYPE_TEMPERATURE: return 't';
-        case COMMON_SAMPLER_TYPE_XTC:         return 'x';
-        case COMMON_SAMPLER_TYPE_INFILL:      return 'i';
-        case COMMON_SAMPLER_TYPE_PENALTIES:   return 'e';
-        default : return '?';
+        case COMMON_SAMPLER_TYPE_DRY:
+            return 'd';
+        case COMMON_SAMPLER_TYPE_TOP_K:
+            return 'k';
+        case COMMON_SAMPLER_TYPE_TYPICAL_P:
+            return 'y';
+        case COMMON_SAMPLER_TYPE_TOP_P:
+            return 'p';
+        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA:
+            return 's';
+        case COMMON_SAMPLER_TYPE_MIN_P:
+            return 'm';
+        case COMMON_SAMPLER_TYPE_TEMPERATURE:
+            return 't';
+        case COMMON_SAMPLER_TYPE_XTC:
+            return 'x';
+        case COMMON_SAMPLER_TYPE_INFILL:
+            return 'i';
+        case COMMON_SAMPLER_TYPE_PENALTIES:
+            return 'e';
+        case COMMON_SAMPLER_TYPE_POWER_LAW:
+            return 'l';
+        default:
+            return '?';
     }
 }
 
 std::string common_sampler_type_to_str(enum common_sampler_type cnstr) {
     switch (cnstr) {
-        case COMMON_SAMPLER_TYPE_DRY:         return "dry";
-        case COMMON_SAMPLER_TYPE_TOP_K:       return "top_k";
-        case COMMON_SAMPLER_TYPE_TYPICAL_P:   return "typ_p";
-        case COMMON_SAMPLER_TYPE_TOP_P:       return "top_p";
-        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA: return "top_n_sigma";
-        case COMMON_SAMPLER_TYPE_MIN_P:       return "min_p";
-        case COMMON_SAMPLER_TYPE_TEMPERATURE: return "temperature";
-        case COMMON_SAMPLER_TYPE_XTC:         return "xtc";
-        case COMMON_SAMPLER_TYPE_INFILL:      return "infill";
-        case COMMON_SAMPLER_TYPE_PENALTIES:   return "penalties";
-        default : return "";
+        case COMMON_SAMPLER_TYPE_DRY:
+            return "dry";
+        case COMMON_SAMPLER_TYPE_TOP_K:
+            return "top_k";
+        case COMMON_SAMPLER_TYPE_TYPICAL_P:
+            return "typ_p";
+        case COMMON_SAMPLER_TYPE_TOP_P:
+            return "top_p";
+        case COMMON_SAMPLER_TYPE_TOP_N_SIGMA:
+            return "top_n_sigma";
+        case COMMON_SAMPLER_TYPE_MIN_P:
+            return "min_p";
+        case COMMON_SAMPLER_TYPE_TEMPERATURE:
+            return "temperature";
+        case COMMON_SAMPLER_TYPE_XTC:
+            return "xtc";
+        case COMMON_SAMPLER_TYPE_INFILL:
+            return "infill";
+        case COMMON_SAMPLER_TYPE_PENALTIES:
+            return "penalties";
+        case COMMON_SAMPLER_TYPE_POWER_LAW:
+            return "power_law";
+        default:
+            return "";
     }
 }
 
-std::vector<common_sampler_type> common_sampler_types_from_names(const std::vector<std::string> & names, bool allow_alt_names) {
+std::vector<common_sampler_type> common_sampler_types_from_names(const std::vector<std::string> & names,
+                                                                 bool                             allow_alt_names) {
     std::unordered_map<std::string, common_sampler_type> sampler_canonical_name_map {
         { "dry",         COMMON_SAMPLER_TYPE_DRY },
         { "top_k",       COMMON_SAMPLER_TYPE_TOP_K },
@@ -586,6 +656,7 @@ std::vector<common_sampler_type> common_sampler_types_from_names(const std::vect
         { "xtc",         COMMON_SAMPLER_TYPE_XTC },
         { "infill",      COMMON_SAMPLER_TYPE_INFILL },
         { "penalties",   COMMON_SAMPLER_TYPE_PENALTIES },
+        { "power_law",   COMMON_SAMPLER_TYPE_POWER_LAW   },
     };
 
     // since samplers names are written multiple ways
@@ -637,6 +708,7 @@ std::vector<common_sampler_type> common_sampler_types_from_chars(const std::stri
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_XTC),         COMMON_SAMPLER_TYPE_XTC },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_INFILL),      COMMON_SAMPLER_TYPE_INFILL },
         { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_PENALTIES),   COMMON_SAMPLER_TYPE_PENALTIES },
+        { common_sampler_type_to_chr(COMMON_SAMPLER_TYPE_POWER_LAW),   COMMON_SAMPLER_TYPE_POWER_LAW   },
     };
 
     std::vector<common_sampler_type> samplers;

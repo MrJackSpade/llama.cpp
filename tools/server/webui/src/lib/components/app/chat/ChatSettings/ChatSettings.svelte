@@ -147,6 +147,41 @@
 					type: 'input'
 				},
 				{
+					key: 'power_law_max_target',
+					label: 'Power Law Max Target',
+					type: 'input'
+				},
+				{
+					key: 'power_law_min_target',
+					label: 'Power Law Min Target',
+					type: 'input'
+				},
+				{
+					key: 'power_law_target',
+					label: 'Power Law Target',
+					type: 'input'
+				},
+				{
+					key: 'power_law_queue_size',
+					label: 'Power Law Queue Size',
+					type: 'input'
+				},
+				{
+					key: 'power_law_distribution_width',
+					label: 'Power Law Distribution Width',
+					type: 'input'
+				},
+				{
+					key: 'power_law_peak_logit_value',
+					label: 'Power Law Peak Logit Value',
+					type: 'input'
+				},
+				{
+					key: 'power_law_tail_heaviness',
+					label: 'Power Law Tail Heaviness',
+					type: 'input'
+				},
+				{
 					key: 'xtc_probability',
 					label: 'XTC probability',
 					type: 'input'
@@ -318,7 +353,14 @@
 			'dry_multiplier',
 			'dry_base',
 			'dry_allowed_length',
-			'dry_penalty_last_n'
+			'dry_penalty_last_n',
+			'power_law_max_target',
+			'power_law_min_target',
+			'power_law_target',
+			'power_law_queue_size',
+			'power_law_distribution_width',
+			'power_law_peak_logit_value',
+			'power_law_tail_heaviness'
 		];
 
 		for (const field of numericFields) {

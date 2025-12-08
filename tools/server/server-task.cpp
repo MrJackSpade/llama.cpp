@@ -1,11 +1,11 @@
-#include "server-common.h"
 #include "server-task.h"
 
-#include "common.h"
-#include "llama.h"
 #include "chat.h"
-#include "sampling.h"
+#include "common.h"
 #include "json-schema-to-grammar.h"
+#include "llama.h"
+#include "sampling.h"
+#include "server-common.h"
 
 using json = nlohmann::ordered_json;
 
@@ -33,7 +33,10 @@ json task_params::to_json(bool only_metrics) const {
 
     json lora = json::array();
     for (size_t i = 0; i < this->lora.size(); ++i) {
-        lora.push_back({{"id", i}, {"scale", this->lora[i].scale}});
+        lora.push_back({
+            { "id",    i                   },
+            { "scale", this->lora[i].scale }
+        });
     }
 
     if (only_metrics) {
@@ -49,6 +52,13 @@ json task_params::to_json(bool only_metrics) const {
             {"xtc_probability",           sampling.xtc_probability},
             {"xtc_threshold",             sampling.xtc_threshold},
             {"typical_p",                 sampling.typ_p},
+            { "power_law_max_target",         sampling.power_law_max_target                                        },
+            { "power_law_min_target",         sampling.power_law_min_target                                        },
+            { "power_law_target",             sampling.power_law_target                                            },
+            { "power_law_queue_size",         sampling.power_law_queue_size                                        },
+            { "power_law_distribution_width", sampling.power_law_distribution_width                                },
+            { "power_law_peak_logit_value",   sampling.power_law_peak_logit_value                                  },
+            { "power_law_tail_heaviness",     sampling.power_law_tail_heaviness                                    },
             {"repeat_last_n",             sampling.penalty_last_n},
             {"repeat_penalty",            sampling.penalty_repeat},
             {"presence_penalty",          sampling.penalty_present},
@@ -100,6 +110,13 @@ json task_params::to_json(bool only_metrics) const {
         {"xtc_probability",           sampling.xtc_probability},
         {"xtc_threshold",             sampling.xtc_threshold},
         {"typical_p",                 sampling.typ_p},
+        { "power_law_max_target",         sampling.power_law_max_target                                        },
+        { "power_law_min_target",         sampling.power_law_min_target                                        },
+        { "power_law_target",             sampling.power_law_target                                            },
+        { "power_law_queue_size",         sampling.power_law_queue_size                                        },
+        { "power_law_distribution_width", sampling.power_law_distribution_width                                },
+        { "power_law_peak_logit_value",   sampling.power_law_peak_logit_value                                  },
+        { "power_law_tail_heaviness",     sampling.power_law_tail_heaviness                                    },
         {"repeat_last_n",             sampling.penalty_last_n},
         {"repeat_penalty",            sampling.penalty_repeat},
         {"presence_penalty",          sampling.penalty_present},
@@ -144,8 +161,7 @@ json task_params::to_json(bool only_metrics) const {
 // server_task
 //
 
-task_params server_task::params_from_json_cmpl(
-        const llama_context * ctx,
+task_params server_task::params_from_json_cmpl(const llama_context * ctx,
         const common_params & params_base,
         const json & data) {
     const llama_model * model = llama_get_model(ctx);
@@ -206,6 +222,20 @@ task_params server_task::params_from_json_cmpl(
     params.sampling.min_keep           = json_value(data, "min_keep",            defaults.sampling.min_keep);
     params.post_sampling_probs         = json_value(data, "post_sampling_probs", defaults.post_sampling_probs);
 
+    params.sampling.power_law_max_target =
+        json_value(data, "power_law_max_target", defaults.sampling.power_law_max_target);
+    params.sampling.power_law_min_target =
+        json_value(data, "power_law_min_target", defaults.sampling.power_law_min_target);
+    params.sampling.power_law_target = json_value(data, "power_law_target", defaults.sampling.power_law_target);
+    params.sampling.power_law_queue_size =
+        json_value(data, "power_law_queue_size", defaults.sampling.power_law_queue_size);
+    params.sampling.power_law_distribution_width =
+        json_value(data, "power_law_distribution_width", defaults.sampling.power_law_distribution_width);
+    params.sampling.power_law_peak_logit_value =
+        json_value(data, "power_law_peak_logit_value", defaults.sampling.power_law_peak_logit_value);
+    params.sampling.power_law_tail_heaviness =
+        json_value(data, "power_law_tail_heaviness", defaults.sampling.power_law_tail_heaviness);
+
     params.speculative.n_min = json_value(data, "speculative.n_min", defaults.speculative.n_min);
     params.speculative.n_max = json_value(data, "speculative.n_max", defaults.speculative.n_max);
     params.speculative.p_min = json_value(data, "speculative.p_min", defaults.speculative.p_min);
@@ -258,7 +288,8 @@ task_params server_task::params_from_json_cmpl(
         // Ref: https://github.com/oobabooga/text-generation-webui/blob/d1af7a41ade7bd3c3a463bfa640725edb818ebaf/extensions/openai/typing.py#L39
 
         if (data.contains("dry_sequence_breakers")) {
-            params.sampling.dry_sequence_breakers = json_value(data, "dry_sequence_breakers", std::vector<std::string>());
+            params.sampling.dry_sequence_breakers =
+                json_value(data, "dry_sequence_breakers", std::vector<std::string>());
             if (params.sampling.dry_sequence_breakers.empty()) {
                 throw std::runtime_error("Error: dry_sequence_breakers must be a non-empty array of strings");
             }
@@ -295,7 +326,8 @@ task_params server_task::params_from_json_cmpl(
             reasoning_format = common_reasoning_format_from_name(data.at("reasoning_format").get<std::string>());
         }
         params.oaicompat_chat_syntax.reasoning_format = reasoning_format;
-        params.oaicompat_chat_syntax.reasoning_in_content = params.stream && (reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY);
+        params.oaicompat_chat_syntax.reasoning_in_content =
+            params.stream && (reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY);
         params.oaicompat_chat_syntax.thinking_forced_open = json_value(data, "thinking_forced_open", false);
         params.oaicompat_chat_syntax.parse_tool_calls = json_value(data, "parse_tool_calls", false);
         if (data.contains("chat_parser")) {
@@ -307,7 +339,8 @@ task_params server_task::params_from_json_cmpl(
         const auto preserved_tokens = data.find("preserved_tokens");
         if (preserved_tokens != data.end()) {
             for (const auto & t : *preserved_tokens) {
-                auto ids = common_tokenize(vocab, t.get<std::string>(), /* add_special= */ false, /* parse_special= */ true);
+                auto ids =
+                    common_tokenize(vocab, t.get<std::string>(), /* add_special= */ false, /* parse_special= */ true);
                 if (ids.size() == 1) {
                     SRV_DBG("Preserved token: %d\n", ids[0]);
                     params.sampling.preserved_tokens.insert(ids[0]);
@@ -326,8 +359,10 @@ task_params server_task::params_from_json_cmpl(
                     auto ids = common_tokenize(vocab, word, /* add_special= */ false, /* parse_special= */ true);
                     if (ids.size() == 1) {
                         auto token = ids[0];
-                        if (std::find(params.sampling.preserved_tokens.begin(), params.sampling.preserved_tokens.end(), (llama_token) token) == params.sampling.preserved_tokens.end()) {
-                            throw std::runtime_error("Grammar trigger word should be marked as preserved token: " + word);
+                        if (std::find(params.sampling.preserved_tokens.begin(), params.sampling.preserved_tokens.end(),
+                                      (llama_token) token) == params.sampling.preserved_tokens.end()) {
+                            throw std::runtime_error("Grammar trigger word should be marked as preserved token: " +
+                                                     word);
                         }
                         SRV_DBG("Grammar trigger token: %d (`%s`)\n", token, word.c_str());
                         common_grammar_trigger trigger;
@@ -418,9 +453,9 @@ task_params server_task::params_from_json_cmpl(
 
         params.sampling.ignore_eos = json_value(data, "ignore_eos", params_base.sampling.ignore_eos);
         if (params.sampling.ignore_eos) {
-            params.sampling.logit_bias.insert(
-                    params.sampling.logit_bias.end(),
-                    defaults.sampling.logit_bias_eog.begin(), defaults.sampling.logit_bias_eog.end());
+            params.sampling.logit_bias.insert(params.sampling.logit_bias.end(),
+                                              defaults.sampling.logit_bias_eog.begin(),
+                                              defaults.sampling.logit_bias_eog.end());
         }
     }
 
@@ -502,10 +537,14 @@ json result_prompt_progress::to_json() const {
 
 static inline std::string stop_type_to_str(stop_type type) {
     switch (type) {
-        case STOP_TYPE_EOS:   return "eos";
-        case STOP_TYPE_WORD:  return "word";
-        case STOP_TYPE_LIMIT: return "limit";
-        default:              return "none";
+        case STOP_TYPE_EOS:
+            return "eos";
+        case STOP_TYPE_WORD:
+            return "word";
+        case STOP_TYPE_LIMIT:
+            return "limit";
+        default:
+            return "none";
     }
 }
 
@@ -522,16 +561,14 @@ json completion_token_output::to_json(bool post_sampling_probs) const {
             {"id",      p.tok},
             {"token",   txt},
             {"bytes",   str_to_bytes(p.txt)},
-            {
-                post_sampling_probs ? "prob" : "logprob",
-                post_sampling_probs ? p.prob : logarithm(p.prob)
-            },
+            { post_sampling_probs ? "prob" : "logprob", post_sampling_probs ? p.prob : logarithm(p.prob) },
         });
     }
     return probs_for_token;
 }
 
-json completion_token_output::probs_vector_to_json(const std::vector<completion_token_output> & probs, bool post_sampling_probs) {
+json completion_token_output::probs_vector_to_json(const std::vector<completion_token_output> & probs,
+                                                   bool                                         post_sampling_probs) {
     json out = json::array();
     for (const auto & p : probs) {
         std::string txt(p.text_to_send);
@@ -540,14 +577,8 @@ json completion_token_output::probs_vector_to_json(const std::vector<completion_
             {"id",           p.tok},
             {"token",        txt},
             {"bytes",        str_to_bytes(p.text_to_send)},
-            {
-                post_sampling_probs ? "prob" : "logprob",
-                post_sampling_probs ? p.prob : logarithm(p.prob)
-            },
-            {
-                post_sampling_probs ? "top_probs" : "top_logprobs",
-                p.to_json(post_sampling_probs)
-            },
+            { post_sampling_probs ? "prob" : "logprob",           post_sampling_probs ? p.prob : logarithm(p.prob) },
+            { post_sampling_probs ? "top_probs" : "top_logprobs", p.to_json(post_sampling_probs)                   },
         });
     }
     return out;
@@ -605,7 +636,8 @@ json server_task_result_cmpl_final::to_json_non_oaicompat() {
         {"timings",             timings.to_json()},
     };
     if (!stream && !probs_output.empty()) {
-        res["completion_probabilities"] = completion_token_output::probs_vector_to_json(probs_output, post_sampling_probs);
+        res["completion_probabilities"] =
+            completion_token_output::probs_vector_to_json(probs_output, post_sampling_probs);
     }
     return response_fields.empty() ? res : json_get_nested_values(response_fields, res);
 }
@@ -623,23 +655,19 @@ json server_task_result_cmpl_final::to_json_oaicompat() {
         finish_reason = "stop";
     }
     json res = json {
-        {"choices",            json::array({
-            json{
+        { "choices",            json::array({ json{
                 {"text",          content},
                 {"index",         index},
                 {"logprobs",      logprobs},
                 {"finish_reason", finish_reason},
-            }
-        })},
+                     } })                                                },
         {"created",            t},
         {"model",              oaicompat_model},
         {"system_fingerprint", build_info},
         {"object",             "text_completion"},
-        {"usage", json {
-            {"completion_tokens", n_decoded},
+        { "usage",              json{ { "completion_tokens", n_decoded },
             {"prompt_tokens",     n_prompt_tokens},
-            {"total_tokens",      n_decoded + n_prompt_tokens}
-        }},
+                         { "total_tokens", n_decoded + n_prompt_tokens } } },
         {"id", oaicompat_cmpl_id}
     };
 
@@ -687,11 +715,9 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat() {
         {"model",              oaicompat_model},
         {"system_fingerprint", build_info},
         {"object",             "chat.completion"},
-        {"usage", json {
-            {"completion_tokens", n_decoded},
+        { "usage",              json{ { "completion_tokens", n_decoded },
             {"prompt_tokens",     n_prompt_tokens},
-            {"total_tokens",      n_decoded + n_prompt_tokens}
-        }},
+                         { "total_tokens", n_decoded + n_prompt_tokens } } },
         {"id", oaicompat_cmpl_id}
     };
 
@@ -706,17 +732,13 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat() {
     return res;
 }
 
-common_chat_msg task_result_state::update_chat_msg(
-        const std::string & text_added,
+common_chat_msg task_result_state::update_chat_msg(const std::string &                 text_added,
         bool is_partial,
         std::vector<common_chat_msg_diff> & diffs) {
     generated_text += text_added;
     auto msg_prv_copy = chat_msg;
     SRV_DBG("Parsing chat message: %s\n", generated_text.c_str());
-    auto new_msg = common_chat_parse(
-        generated_text,
-        is_partial,
-        oaicompat_chat_syntax);
+    auto new_msg = common_chat_parse(generated_text, is_partial, oaicompat_chat_syntax);
     if (!new_msg.empty()) {
         new_msg.set_tool_call_ids(generated_tool_call_ids, gen_tool_call_id);
         chat_msg = new_msg;
@@ -775,7 +797,8 @@ json server_task_result_cmpl_final::to_json_oaicompat_chat_stream() {
             {"model",              oaicompat_model},
             {"system_fingerprint", build_info},
             {"object",             "chat.completion.chunk"},
-            {"usage", json {
+            { "usage",
+             json{
                 {"completion_tokens", n_decoded},
                 {"prompt_tokens",     n_prompt_tokens},
                 {"total_tokens",      n_decoded + n_prompt_tokens},
@@ -842,10 +865,7 @@ json server_task_result_cmpl_final::to_json_anthropic() {
         {"model", oaicompat_model},
         {"stop_reason", stop_reason},
         {"stop_sequence", stopping_word.empty() ? nullptr : json(stopping_word)},
-        {"usage", {
-            {"input_tokens", n_prompt_tokens},
-            {"output_tokens", n_decoded}
-        }}
+        { "usage",         { { "input_tokens", n_prompt_tokens }, { "output_tokens", n_decoded } } }
     };
 
     return res;
@@ -870,28 +890,20 @@ json server_task_result_cmpl_final::to_json_anthropic_stream() {
             if (!text_block_started) {
                 events.push_back({
                     {"event", "content_block_start"},
-                    {"data", {
-                        {"type", "content_block_start"},
+                    { "data",
+                     { { "type", "content_block_start" },
                         {"index", 0},
-                        {"content_block", {
-                            {"type", "text"},
-                            {"text", ""}
-                        }}
-                    }}
+                        { "content_block", { { "type", "text" }, { "text", "" } } } } }
                 });
                 text_block_started = true;
             }
 
             events.push_back({
                 {"event", "content_block_delta"},
-                {"data", {
-                    {"type", "content_block_delta"},
+                { "data",
+                 { { "type", "content_block_delta" },
                     {"index", 0},
-                    {"delta", {
-                        {"type", "text_delta"},
-                        {"text", diff.content_delta}
-                    }}
-                }}
+                    { "delta", { { "type", "text_delta" }, { "text", diff.content_delta } } } } }
             });
         }
 
@@ -903,15 +915,13 @@ json server_task_result_cmpl_final::to_json_anthropic_stream() {
 
                 events.push_back({
                     {"event", "content_block_start"},
-                    {"data", {
-                        {"type", "content_block_start"},
+                    { "data",
+                     { { "type", "content_block_start" },
                         {"index", content_block_index},
-                        {"content_block", {
-                            {"type", "tool_use"},
+                        { "content_block",
+                          { { "type", "tool_use" },
                             {"id", full_tool_call.id},
-                            {"name", full_tool_call.name}
-                        }}
-                    }}
+                            { "name", full_tool_call.name } } } } }
                 });
                 tool_calls_started.insert(diff.tool_call_index);
             }
@@ -919,14 +929,12 @@ json server_task_result_cmpl_final::to_json_anthropic_stream() {
             if (!diff.tool_call_delta.arguments.empty()) {
                 events.push_back({
                     {"event", "content_block_delta"},
-                    {"data", {
-                        {"type", "content_block_delta"},
+                    { "data",
+                     { { "type", "content_block_delta" },
                         {"index", content_block_index},
-                        {"delta", {
-                            {"type", "input_json_delta"},
-                            {"partial_json", diff.tool_call_delta.arguments}
-                        }}
-                    }}
+                        { "delta",
+                          { { "type", "input_json_delta" },
+                            { "partial_json", diff.tool_call_delta.arguments } } } } }
                 });
             }
         }
@@ -935,10 +943,7 @@ json server_task_result_cmpl_final::to_json_anthropic_stream() {
     if (has_text) {
         events.push_back({
             {"event", "content_block_stop"},
-            {"data", {
-                {"type", "content_block_stop"},
-                {"index", 0}
-            }}
+            { "data",  { { "type", "content_block_stop" }, { "index", 0 } } }
         });
     }
 
@@ -946,32 +951,23 @@ json server_task_result_cmpl_final::to_json_anthropic_stream() {
         size_t content_block_index = (has_text ? 1 : 0) + i;
         events.push_back({
             {"event", "content_block_stop"},
-            {"data", {
-                {"type", "content_block_stop"},
-                {"index", content_block_index}
-            }}
+            { "data",  { { "type", "content_block_stop" }, { "index", content_block_index } } }
         });
     }
 
     events.push_back({
         {"event", "message_delta"},
-        {"data", {
-            {"type", "message_delta"},
-            {"delta", {
-                {"stop_reason", stop_reason},
-                {"stop_sequence", stopping_word.empty() ? nullptr : json(stopping_word)}
-            }},
-            {"usage", {
-                {"output_tokens", n_decoded}
-            }}
-        }}
+        { "data",
+         { { "type", "message_delta" },
+            { "delta",
+              { { "stop_reason", stop_reason },
+                { "stop_sequence", stopping_word.empty() ? nullptr : json(stopping_word) } } },
+            { "usage", { { "output_tokens", n_decoded } } } } }
     });
 
     events.push_back({
         {"event", "message_stop"},
-        {"data", {
-            {"type", "message_stop"}
-        }}
+        { "data",  { { "type", "message_stop" } } }
     });
 
     return events;
@@ -1015,7 +1011,8 @@ json server_task_result_cmpl_partial::to_json_non_oaicompat() {
         res.push_back({"prompt_progress", progress.to_json()});
     }
     if (!prob_output.probs.empty()) {
-        res["completion_probabilities"] = completion_token_output::probs_vector_to_json({prob_output}, post_sampling_probs);
+        res["completion_probabilities"] =
+            completion_token_output::probs_vector_to_json({ prob_output }, post_sampling_probs);
     }
     return res;
 }
@@ -1029,14 +1026,12 @@ json server_task_result_cmpl_partial::to_json_oaicompat() {
         };
     }
     json res = json {
-        {"choices",            json::array({
-            json{
+        { "choices",            json::array({ json{
                 {"text",          content},
                 {"index",         index},
                 {"logprobs",      logprobs},
                 {"finish_reason", nullptr},
-            }
-        })},
+                     } })     },
         {"created",            t},
         {"model",              oaicompat_model},
         {"system_fingerprint", build_info},
@@ -1117,9 +1112,7 @@ json server_task_result_cmpl_partial::to_json_oaicompat_chat() {
 // server_task_result_embd
 //
 json server_task_result_embd::to_json() {
-    return res_type == TASK_RESPONSE_TYPE_OAI_EMBD
-        ? to_json_oaicompat()
-        : to_json_non_oaicompat();
+    return res_type == TASK_RESPONSE_TYPE_OAI_EMBD ? to_json_oaicompat() : to_json_non_oaicompat();
 }
 
 json server_task_result_embd::to_json_non_oaicompat() {
@@ -1158,22 +1151,17 @@ json server_task_result_cmpl_partial::to_json_anthropic() {
 
         events.push_back({
             {"event", "message_start"},
-            {"data", {
-                {"type", "message_start"},
-                {"message", {
-                    {"id", oaicompat_cmpl_id},
+            { "data",
+             { { "type", "message_start" },
+                { "message",
+                  { { "id", oaicompat_cmpl_id },
                     {"type", "message"},
                     {"role", "assistant"},
                     {"content", json::array()},
                     {"model", oaicompat_model},
                     {"stop_reason", nullptr},
                     {"stop_sequence", nullptr},
-                    {"usage", {
-                        {"input_tokens", n_prompt_tokens},
-                        {"output_tokens", 0}
-                    }}
-                }}
-            }}
+                    { "usage", { { "input_tokens", n_prompt_tokens }, { "output_tokens", 0 } } } } } } }
         });
     }
 
@@ -1182,28 +1170,20 @@ json server_task_result_cmpl_partial::to_json_anthropic() {
             if (!text_block_started) {
                 events.push_back({
                     {"event", "content_block_start"},
-                    {"data", {
-                        {"type", "content_block_start"},
+                    { "data",
+                     { { "type", "content_block_start" },
                         {"index", 0},
-                        {"content_block", {
-                            {"type", "text"},
-                            {"text", ""}
-                        }}
-                    }}
+                        { "content_block", { { "type", "text" }, { "text", "" } } } } }
                 });
                 text_block_started = true;
             }
 
             events.push_back({
                 {"event", "content_block_delta"},
-                {"data", {
-                    {"type", "content_block_delta"},
+                { "data",
+                 { { "type", "content_block_delta" },
                     {"index", 0},
-                    {"delta", {
-                        {"type", "text_delta"},
-                        {"text", diff.content_delta}
-                    }}
-                }}
+                    { "delta", { { "type", "text_delta" }, { "text", diff.content_delta } } } } }
             });
         }
 
@@ -1213,29 +1193,25 @@ json server_task_result_cmpl_partial::to_json_anthropic() {
             if (!diff.tool_call_delta.name.empty()) {
                 events.push_back({
                     {"event", "content_block_start"},
-                    {"data", {
-                        {"type", "content_block_start"},
+                    { "data",
+                     { { "type", "content_block_start" },
                         {"index", content_block_index},
-                        {"content_block", {
-                            {"type", "tool_use"},
+                        { "content_block",
+                          { { "type", "tool_use" },
                             {"id", diff.tool_call_delta.id},
-                            {"name", diff.tool_call_delta.name}
-                        }}
-                    }}
+                            { "name", diff.tool_call_delta.name } } } } }
                 });
             }
 
             if (!diff.tool_call_delta.arguments.empty()) {
                 events.push_back({
                     {"event", "content_block_delta"},
-                    {"data", {
-                        {"type", "content_block_delta"},
+                    { "data",
+                     { { "type", "content_block_delta" },
                         {"index", content_block_index},
-                        {"delta", {
-                            {"type", "input_json_delta"},
-                            {"partial_json", diff.tool_call_delta.arguments}
-                        }}
-                    }}
+                        { "delta",
+                          { { "type", "input_json_delta" },
+                            { "partial_json", diff.tool_call_delta.arguments } } } } }
                 });
             }
         }
@@ -1295,9 +1271,7 @@ json server_task_result_slot_save_load::to_json() {
             { "filename",  filename },
             { "n_saved",   n_tokens },
             { "n_written", n_bytes },
-            { "timings", {
-                { "save_ms", t_ms }
-            }},
+            { "timings",   { { "save_ms", t_ms } } },
         };
     }
 
@@ -1306,9 +1280,7 @@ json server_task_result_slot_save_load::to_json() {
         { "filename",   filename },
         { "n_restored", n_tokens },
         { "n_read",     n_bytes },
-        { "timings", {
-            { "restore_ms", t_ms }
-        }},
+        { "timings",    { { "restore_ms", t_ms } } },
     };
 }
 
@@ -1327,7 +1299,9 @@ json server_task_result_slot_erase::to_json() {
 //
 
 json server_task_result_apply_lora::to_json() {
-    return json {{ "success", true }};
+    return json{
+        { "success", true }
+    };
 }
 
 //
@@ -1405,7 +1379,10 @@ server_prompt * server_prompt_cache::alloc(const server_prompt & prompt, size_t 
     return &cur;
 }
 
-bool server_prompt_cache::load(server_prompt & prompt, const server_tokens & tokens_new, llama_context * ctx, int32_t id_slot) {
+bool server_prompt_cache::load(server_prompt &       prompt,
+                               const server_tokens & tokens_new,
+                               llama_context *       ctx,
+                               int32_t               id_slot) {
     const int lcp_best = prompt.tokens.get_common_prefix(tokens_new);
 
     float f_keep_best = float(lcp_best) / prompt.tokens.size();
@@ -1465,7 +1442,8 @@ void server_prompt_cache::update() {
                 break;
             }
 
-            SRV_WRN(" - cache size limit reached, removing oldest entry (size = %.3f MiB)\n", states.front().size() / (1024.0 * 1024.0));
+            SRV_WRN(" - cache size limit reached, removing oldest entry (size = %.3f MiB)\n",
+                    states.front().size() / (1024.0 * 1024.0));
 
             states.pop_front();
         }
@@ -1475,7 +1453,8 @@ void server_prompt_cache::update() {
     const float size_per_token = std::max<float>(1.0f, float(size()) / (std::max<size_t>(1, n_tokens())));
 
     // dynamically increase the token limit if it can fit in the memory limit
-    const size_t limit_tokens_cur = limit_size > 0 ? std::max<size_t>(limit_tokens, limit_size/size_per_token) : limit_tokens;
+    const size_t limit_tokens_cur =
+        limit_size > 0 ? std::max<size_t>(limit_tokens, limit_size / size_per_token) : limit_tokens;
 
     if (limit_tokens > 0) {
         while (states.size() > 1 && n_tokens() > limit_tokens_cur) {
@@ -1490,11 +1469,11 @@ void server_prompt_cache::update() {
         }
     }
 
-    SRV_WRN(" - cache state: %zu prompts, %.3f MiB (limits: %.3f MiB, %zu tokens, %zu est)\n",
-            states.size(), size() / (1024.0 * 1024.0), limit_size / (1024.0 * 1024.0), limit_tokens, limit_tokens_cur);
+    SRV_WRN(" - cache state: %zu prompts, %.3f MiB (limits: %.3f MiB, %zu tokens, %zu est)\n", states.size(),
+            size() / (1024.0 * 1024.0), limit_size / (1024.0 * 1024.0), limit_tokens, limit_tokens_cur);
 
     for (const auto & state : states) {
-        SRV_WRN("   - prompt %p: %7d tokens, checkpoints: %2zu, %9.3f MiB\n",
-                (const void *)&state, state.n_tokens(), state.checkpoints.size(), state.size() / (1024.0 * 1024.0));
+        SRV_WRN("   - prompt %p: %7d tokens, checkpoints: %2zu, %9.3f MiB\n", (const void *) &state, state.n_tokens(),
+                state.checkpoints.size(), state.size() / (1024.0 * 1024.0));
     }
 }

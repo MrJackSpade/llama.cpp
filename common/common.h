@@ -5,12 +5,12 @@
 #include "ggml-opt.h"
 #include "llama-cpp.h"
 
+#include <map>
 #include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <map>
 
 #if defined(_WIN32) && !defined(_WIN32_WINNT)
 #define _WIN32_WINNT 0x0A00
@@ -22,10 +22,19 @@
 #define DIRECTORY_SEPARATOR '/'
 #endif // _WIN32
 
-#define die(msg)          do { fputs("error: " msg "\n", stderr);                exit(1); } while (0)
-#define die_fmt(fmt, ...) do { fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); exit(1); } while (0)
+#define die(msg)                           \
+    do {                                   \
+        fputs("error: " msg "\n", stderr); \
+        exit(1);                           \
+    } while (0)
+#define die_fmt(fmt, ...)                                 \
+    do {                                                  \
+        fprintf(stderr, "error: " fmt "\n", __VA_ARGS__); \
+        exit(1);                                          \
+    } while (0)
 
-#define print_build_info() do {                                                                     \
+#define print_build_info()                                                                           \
+    do {                                                                                             \
     fprintf(stderr, "%s: build = %d (%s)\n",      __func__, LLAMA_BUILD_NUMBER, LLAMA_COMMIT);      \
     fprintf(stderr, "%s: built with %s for %s\n", __func__, LLAMA_COMPILER, LLAMA_BUILD_TARGET);    \
 } while(0)
@@ -67,7 +76,8 @@ struct cpu_params {
     int      n_threads                   = -1;
     bool     cpumask[GGML_MAX_N_THREADS] = {false}; // CPU affinity mask.
     bool     mask_valid                  = false;   // Default: any CPU
-    enum ggml_sched_priority  priority   = GGML_SCHED_PRIO_NORMAL;  // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
+    enum ggml_sched_priority priority =
+        GGML_SCHED_PRIO_NORMAL;   // Scheduling prio : (0 - normal, 1 - medium, 2 - high, 3 - realtime)
     bool     strict_cpu                  = false;   // Use strict CPU placement
     uint32_t poll                        = 50;      // Polling (busywait) level (0 - no polling, 100 - mostly polling)
 };
@@ -115,6 +125,7 @@ enum common_sampler_type {
     COMMON_SAMPLER_TYPE_INFILL      = 9,
     COMMON_SAMPLER_TYPE_PENALTIES   = 10,
     COMMON_SAMPLER_TYPE_TOP_N_SIGMA = 11,
+    COMMON_SAMPLER_TYPE_POWER_LAW   = 12,
 };
 
 // dimensionality reduction methods, used by cvector-generator
@@ -157,7 +168,6 @@ enum common_params_sampling_config : uint64_t {
     COMMON_PARAMS_SAMPLING_CONFIG_MIROSTAT_ETA    = 1 << 11,
 };
 
-
 // sampling parameters
 struct common_params_sampling {
     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
@@ -166,7 +176,7 @@ struct common_params_sampling {
     int32_t n_probs            = 0;     // if greater than 0, output the probabilities of top n_probs tokens.
     int32_t min_keep           = 0;     // 0 = disabled, otherwise samplers should return at least min_keep tokens
     int32_t top_k              = 40;    // <= 0 to use vocab size
-    float   top_p              = 0.95f; // 1.0 = disabled
+    float   top_p             = 1.00f;   // 1.0 = disabled
     float   min_p              = 0.05f; // 0.0 = disabled
     float   xtc_probability    = 0.00f; // 0.0 = disabled
     float   xtc_threshold      = 0.10f; // > 0.5 disables XTC
@@ -179,13 +189,22 @@ struct common_params_sampling {
     float   penalty_freq       = 0.00f; // 0.0 = disabled
     float   penalty_present    = 0.00f; // 0.0 = disabled
     float   dry_multiplier     = 0.0f;  // 0.0 = disabled;      DRY repetition penalty for tokens extending repetition:
-    float   dry_base           = 1.75f; // 0.0 = disabled;      multiplier * base ^ (length of sequence before token - allowed length)
+    float   dry_base =
+        1.75f;  // 0.0 = disabled;      multiplier * base ^ (length of sequence before token - allowed length)
     int32_t dry_allowed_length = 2;     // tokens extending repetitions beyond this receive penalty
-    int32_t dry_penalty_last_n = -1;    // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
+    int32_t dry_penalty_last_n =
+        -1;                          // how many tokens to scan for repetitions (0 = disable penalty, -1 = context size)
     int32_t mirostat           = 0;     // 0 = disabled, 1 = mirostat, 2 = mirostat 2.0
     float   top_n_sigma        = -1.00f;// -1.0 = disabled
     float   mirostat_tau       = 5.00f; // target entropy
     float   mirostat_eta       = 0.10f; // learning rate
+    float   power_law_max_target         = 1.0f;
+    float   power_law_min_target         = 0.0f;
+    float   power_law_target             = 0.4f;
+    int32_t power_law_queue_size         = 10;
+    float   power_law_distribution_width = 0.2f;
+    float   power_law_peak_logit_value   = 3.0f;
+    float   power_law_tail_heaviness     = 3.0f;   // Lower values = heavier tails, 2.0 = Cauchy
     bool    ignore_eos         = false;
     bool    no_perf            = false; // disable performance metrics
     bool    timing_per_token   = false;
@@ -194,17 +213,11 @@ struct common_params_sampling {
 
     std::vector<std::string> dry_sequence_breakers = {"\n", ":", "\"", "*"};     // default sequence breakers for DRY
 
-
     std::vector<enum common_sampler_type> samplers = {
         COMMON_SAMPLER_TYPE_PENALTIES,
-        COMMON_SAMPLER_TYPE_DRY,
-        COMMON_SAMPLER_TYPE_TOP_N_SIGMA,
-        COMMON_SAMPLER_TYPE_TOP_K,
-        COMMON_SAMPLER_TYPE_TYPICAL_P,
-        COMMON_SAMPLER_TYPE_TOP_P,
         COMMON_SAMPLER_TYPE_MIN_P,
-        COMMON_SAMPLER_TYPE_XTC,
         COMMON_SAMPLER_TYPE_TEMPERATURE,
+        COMMON_SAMPLER_TYPE_POWER_LAW,
     };
 
     std::string                         grammar; // optional BNF-like grammar to constrain sampling
@@ -282,7 +295,6 @@ enum common_reasoning_format {
     // see: https://github.com/ggml-org/llama.cpp/pull/15408
 };
 
-
 struct lr_opt {
     float    lr0          = 1e-5; // learning rate at first epoch
     float    lr_min       = -1;
@@ -294,7 +306,9 @@ struct lr_opt {
     unsigned epoch; // set by optimizer outer (epochs) loop
     // learning rate decay - constant LR per epoch only for now
     float get_lr(float e) const;
+
     float get_lr() const { return get_lr(epoch); }
+
     // must call after arg parse, before get_lr
     void init();
 };
@@ -367,7 +381,8 @@ struct common_params {
     std::vector<llama_model_kv_override> kv_overrides;
     std::vector<llama_model_tensor_buft_override> tensor_buft_overrides;
 
-    bool lora_init_without_apply = false; // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_adapter_lora_apply)
+    bool lora_init_without_apply =
+        false;  // only load lora to memory, but do not apply it to ctx (user can manually apply lora later using llama_adapter_lora_apply)
     std::vector<common_adapter_lora_info> lora_adapters; // lora adapter path with user defined scale
 
     std::vector<common_control_vector_load_info> control_vectors; // control vector with user defined scale
@@ -377,7 +392,8 @@ struct common_params {
     int32_t control_vector_layer_end   = -1; // layer range for control vector
     bool    offline                    = false;
 
-    int32_t ppl_stride      = 0;     // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
+    int32_t ppl_stride =
+        0;  // stride for perplexity calculations. If left at 0, the pre-existing approach will be used.
     int32_t ppl_output_type = 0;     // = 0 -> ppl output is as usual, = 1 -> ppl output is num_tokens, ppl, one per line
                                      //                                       (which is more convenient to use for plotting)
                                      //
@@ -385,10 +401,12 @@ struct common_params {
     size_t hellaswag_tasks  = 400;   // number of tasks to use when computing the HellaSwag score
 
     bool   winogrande       = false; // compute Winogrande score over random tasks from datafile supplied in prompt
-    size_t winogrande_tasks = 0;     // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
+    size_t winogrande_tasks =
+        0;  // number of tasks to use when computing the Winogrande score. If 0, all tasks will be computed
 
     bool   multiple_choice  = false;  // compute TruthfulQA score over random tasks from datafile supplied in prompt
-    size_t multiple_choice_tasks = 0; // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
+    size_t multiple_choice_tasks =
+        0;  // number of tasks to use when computing the TruthfulQA score. If 0, all tasks will be computed
 
     bool   kl_divergence    = false; // compute KL divergence
 
@@ -407,7 +425,8 @@ struct common_params {
     bool cont_batching     = true;  // insert new sequences for decoding on-the-fly
     bool no_perf           = false; // disable performance metrics
     bool ctx_shift         = false; // context shift on infinite text generation
-    bool swa_full          = false; // use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
+    bool swa_full =
+        false;  // use full-size SWA cache (https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
     bool kv_unified        = false; // enable unified KV cache
 
     bool input_prefix_bos  = false; // prefix BOS to user inputs, preceding input_prefix
@@ -444,8 +463,10 @@ struct common_params {
 
     // embedding
     bool embedding         = false; // get only sentence embedding
-    int32_t embd_normalize = 2;     // normalisation for embeddings (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)
-    std::string embd_out   = "";    // empty = default, "array" = [[],[]...], "json" = openai style, "json+" = same "json" + cosine similarity matrix
+    int32_t embd_normalize =
+        2;  // normalisation for embeddings (-1=none, 0=max absolute int16, 1=taxicab, 2=euclidean, >2=p-norm)
+    std::string embd_out =
+        "";  // empty = default, "array" = [[],[]...], "json" = openai style, "json+" = same "json" + cosine similarity matrix
     std::string embd_sep   = "\n";  // separator of embeddings
     std::string cls_sep    = "\t";  // separator of classification sequences
 
@@ -543,9 +564,7 @@ struct common_params {
     llama_progress_callback load_progress_callback = NULL;
     void *                  load_progress_callback_user_data = NULL;
 
-    bool has_speculative() const {
-        return !speculative.model.path.empty() || !speculative.model.hf_repo.empty();
-    }
+    bool has_speculative() const { return !speculative.model.path.empty() || !speculative.model.hf_repo.empty(); }
 };
 
 // call once at the start of a program if it uses libcommon
@@ -587,8 +606,7 @@ void string_replace_all(std::string & s, const std::string & search, const std::
 
 std::string regex_escape(const std::string & s);
 
-template<class T>
-static std::vector<T> string_split(const std::string & str, char delim) {
+template <class T> static std::vector<T> string_split(const std::string & str, char delim) {
     static_assert(!std::is_same<T, std::string>::value, "Please use the specialized version for std::string");
     std::vector<T> values;
     std::istringstream str_stream(str);
@@ -602,9 +620,7 @@ static std::vector<T> string_split(const std::string & str, char delim) {
     return values;
 }
 
-template<>
-std::vector<std::string> string_split<std::string>(const std::string & input, char separator)
-{
+template <> std::vector<std::string> string_split<std::string>(const std::string & input, char separator) {
     std::vector<std::string> parts;
     size_t begin_pos = 0;
     size_t separator_pos = input.find(separator);
@@ -653,6 +669,7 @@ struct common_file_info {
     size_t      size = 0; // in bytes
     bool        is_dir = false;
 };
+
 std::vector<common_file_info> fs_list(const std::string & path, bool include_directories);
 
 //
@@ -691,8 +708,7 @@ std::string                   get_model_endpoint();
 
 void common_batch_clear(struct llama_batch & batch);
 
-void common_batch_add(
-                 struct llama_batch & batch,
+void common_batch_add(struct llama_batch &              batch,
                         llama_token   id,
                           llama_pos   pos,
     const std::vector<llama_seq_id> & seq_ids,
@@ -714,40 +730,30 @@ size_t common_lcs(const llama_tokens & a, const llama_tokens & b);
 
 // tokenizes a string into a vector of tokens
 // should work similar to Python's `tokenizer.encode`
-std::vector<llama_token> common_tokenize(
-  const struct llama_context * ctx,
+std::vector<llama_token> common_tokenize(const struct llama_context * ctx,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
 
-std::vector<llama_token> common_tokenize(
-    const struct llama_vocab * vocab,
+std::vector<llama_token> common_tokenize(const struct llama_vocab * vocab,
            const std::string & text,
                         bool   add_special,
                         bool   parse_special = false);
 
 // tokenizes a token into a piece, optionally renders special/control tokens
 // should work similar to Python's `tokenizer.id_to_piece`
-std::string common_token_to_piece(
-        const struct llama_context * ctx,
-                       llama_token   token,
-                       bool          special = true);
+std::string common_token_to_piece(const struct llama_context * ctx, llama_token token, bool special = true);
 
-std::string common_token_to_piece(
-          const struct llama_vocab * vocab,
-                       llama_token   token,
-                       bool          special = true);
+std::string common_token_to_piece(const struct llama_vocab * vocab, llama_token token, bool special = true);
 
 // detokenizes a vector of tokens into a string
 // should work similar to Python's `tokenizer.decode`
 // optionally renders special/control tokens
-std::string common_detokenize(
-            const struct llama_context * ctx,
+std::string common_detokenize(const struct llama_context *     ctx,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
 
-std::string common_detokenize(
-              const struct llama_vocab * vocab,
+std::string common_detokenize(const struct llama_vocab *       vocab,
         const std::vector<llama_token> & tokens,
                                   bool   special = true);
 
@@ -791,7 +797,7 @@ const char * const LLM_KV_SPLIT_NO            = "split.no";
 const char * const LLM_KV_SPLIT_COUNT         = "split.count";
 const char * const LLM_KV_SPLIT_TENSORS_COUNT = "split.tensors.count";
 
-}
+}  // namespace
 
 //
 // MoE utils
@@ -811,7 +817,9 @@ static llama_model_tensor_buft_override llm_ffn_exps_cpu_override() {
 // training utils
 //
 
-ggml_opt_dataset_t common_opt_dataset_init(struct llama_context * ctx, const std::vector<llama_token> & tokens, int64_t stride);
+ggml_opt_dataset_t common_opt_dataset_init(struct llama_context *           ctx,
+                                           const std::vector<llama_token> & tokens,
+                                           int64_t                          stride);
 
 // "adamw" or "sgd" (case insensitive)
 enum ggml_opt_optimizer_type common_opt_get_optimizer(const char *);

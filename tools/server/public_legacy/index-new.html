@@ -830,6 +830,17 @@ return html`
         ${FloatField({ label: "Temperature", title: "This will adjust the overall randomness of the generated text. It is the most common sampler. Default is 0.8 but consider using lower values for more factual texts or for non-English text generation", max: 2.0, min: 0.0, name: "temperature", step: 0.01, value: params.value.temperature })}
       </fieldset>
 
+      <fieldset class="params">
+        <legend>Power Law Sampler</legend>
+        ${FloatField({ label: "Max Target", title: "Power Law Max Target", max: 1.0, min: 0.0, name: "power_law_max_target", step: 0.01, value: params.value.power_law_max_target })}
+        ${FloatField({ label: "Min Target", title: "Power Law Min Target", max: 1.0, min: 0.0, name: "power_law_min_target", step: 0.01, value: params.value.power_law_min_target })}
+        ${FloatField({ label: "Target", title: "Power Law Target", max: 1.0, min: 0.0, name: "power_law_target", step: 0.01, value: params.value.power_law_target })}
+        ${IntField({ label: "Queue Size", title: "Power Law Queue Size", max: 100, min: 1, name: "power_law_queue_size", value: params.value.power_law_queue_size })}
+        ${FloatField({ label: "Distribution Width", title: "Power Law Distribution Width", max: 1.0, min: 0.0, name: "power_law_distribution_width", step: 0.01, value: params.value.power_law_distribution_width })}
+        ${FloatField({ label: "Peak Logit Value", title: "Power Law Peak Logit Value", max: 10.0, min: 0.0, name: "power_law_peak_logit_value", step: 0.1, value: params.value.power_law_peak_logit_value })}
+        ${FloatField({ label: "Tail Heaviness", title: "Power Law Tail Heaviness", max: 10.0, min: 0.0, name: "power_law_tail_heaviness", step: 0.1, value: params.value.power_law_tail_heaviness })}
+      </fieldset>
+
       <details>
         <summary><span class="summary-title">Further Options</span></summary>
         <fieldset class="params">
