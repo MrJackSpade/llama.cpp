@@ -1,48 +1,48 @@
-# Sampler Configuration Comparison Study  
-  
-## Table of Contents  
-- [Overview](#overview)  
-- [Test Prompts](#test-prompts)  
-  - [Creative Writing](#creative-writing)  
-  - [Factual Recall](#factual-recall)  
-  - [Logic/Reasoning](#logicreasoning)  
-- [Results](#results)  
-  - [Creative Writing Results](#creative-writing-results)  
-  - [Factual Recall Results](#factual-recall-results)  
-  - [Logic/Reasoning Results](#logicreasoning-results)  
-  
----  
-  
-## Overview  
-  
-This document compares two sampler configurations across three different task types:  
-  
-### Sampler Configurations  
-  
-**Power Law Sampler**  
-- Chain: `penalties;min_p;temperature;power_law`  
-- Temperature: 0.8 (fixed)  
-- Variable: Target setting  
-  
-**Standard Sampler**  
-- Chain: `penalties;dry;top_n_sigma;top_k;typ_p;top_p;min_p;xtc;temperature`  
-- Temperature: Variable  
-  
----  
-  
-## Test Prompts  
-  
-### Creative Writing  
-**Prompt:** Write a three-sentence horror story set in a laundromat.  
-  
-### Factual Recall  
-**Prompt:** What are the first 6 elements of the periodic table in order, with their symbols?  
-  
-### Logic/Reasoning  
-**Prompt:** A bat and ball cost $1.10 together. The bat costs $1 more than the ball. What does the ball cost? Explain your reasoning  
-  
----  
-  
+# Sampler Configuration Comparison Study
+
+## Table of Contents
+- [Overview](#overview)
+- [Test Prompts](#test-prompts)
+  - [Creative Writing](#creative-writing)
+  - [Factual Recall](#factual-recall)
+  - [Logic/Reasoning](#logicreasoning)
+- [Results](#results)
+  - [Creative Writing Results](#creative-writing-results)
+  - [Factual Recall Results](#factual-recall-results)
+  - [Logic/Reasoning Results](#logicreasoning-results)
+
+---
+
+## Overview
+
+This document compares two sampler configurations across three different task types:
+
+### Sampler Configurations
+
+**Power Law Sampler**
+- Chain: `penalties;min_p;temperature;power_law`
+- Temperature: 0.8 (fixed)
+- Variable: Target setting
+
+**Standard Sampler**
+- Chain: `penalties;dry;top_n_sigma;top_k;typ_p;top_p;min_p;xtc;temperature`
+- Temperature: Variable
+
+---
+
+## Test Prompts
+
+### Creative Writing
+**Prompt:** Write a three-sentence horror story set in a laundromat.
+
+### Factual Recall
+**Prompt:** What are the first 6 elements of the periodic table in order, with their symbols?
+
+### Logic/Reasoning
+**Prompt:** A bat and ball cost $1.10 together. The bat costs $1 more than the ball. What does the ball cost? Explain your reasoning
+
+---
+
 ## Results  
   
 ### Creative Writing Results  
