@@ -789,6 +789,26 @@ enum common_params_fit_status common_fit_params(
     return status;
 }
 
+// C-linkage wrapper around common_fit_params() for FFI consumers (e.g. the LlamaBot .NET bindings).
+// See common/fit.h for the contract. Returns the common_params_fit_status code as an int.
+extern "C" int llama_params_fit(
+        const char *                              path_model,
+        struct llama_model_params *               mparams,
+        struct llama_context_params *             cparams,
+        float *                                   tensor_split,
+        struct llama_model_tensor_buft_override * tensor_buft_overrides,
+        size_t *                                  margins,
+        uint32_t                                  n_ctx_min,
+        int                                       log_level) {
+    std::vector<size_t> default_margins;
+    if (margins == nullptr) {
+        default_margins.assign(llama_max_devices(), size_t(1024) * 1024 * 1024);
+        margins = default_margins.data();
+    }
+    return (int) common_fit_params(path_model, mparams, cparams, tensor_split, tensor_buft_overrides,
+                                   margins, n_ctx_min, (ggml_log_level) log_level);
+}
+
 void common_memory_breakdown_print(const struct llama_context * ctx) {
     //const auto & devices = ctx->get_model().devices;
     const auto * model = llama_get_model(ctx);
