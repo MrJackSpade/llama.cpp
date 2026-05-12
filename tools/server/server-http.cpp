@@ -4,13 +4,19 @@
 
 #include <cpp-httplib/httplib.h>
 
+#include <cstdlib>
 #include <functional>
+#include <future>
 #include <string>
 #include <thread>
 
+#ifdef LLAMA_BUILD_WEBUI
 // auto generated files (see README.md for details)
-#include "index.html.gz.hpp"
+#include "index.html.hpp"
+#include "bundle.js.hpp"
+#include "bundle.css.hpp"
 #include "loading.html.hpp"
+#endif
 
 //
 // HTTP implementation using cpp-httplib
@@ -28,23 +34,69 @@ server_http_context::server_http_context()
 server_http_context::~server_http_context() = default;
 
 static void log_server_request(const httplib::Request & req, const httplib::Response & res) {
-    // skip GH copilot requests when using default port
-    if (req.path == "/v1/health") {
+    // skip logging requests that are regularly sent, to avoid log spam
+    if (req.path == "/health"
+        || req.path == "/v1/health"
+        || req.path == "/models"
+        || req.path == "/v1/models"
+        || req.path == "/props"
+        || req.path == "/metrics"
+    ) {
         return;
     }
 
     // reminder: this function is not covered by httplib's exception handler; if someone does more complicated stuff, think about wrapping it in try-catch
 
-    SRV_INF("request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
+    SRV_INF("done request: %s %s %s %d\n", req.method.c_str(), req.path.c_str(), req.remote_addr.c_str(), res.status);
 
     SRV_DBG("request:  %s\n", req.body.c_str());
     SRV_DBG("response: %s\n", res.body.c_str());
 }
 
+// For Google Cloud Platform deployment compatibility
+struct gcp_params {
+    bool enabled;
+    std::string path_health;
+    std::string path_predict;
+    int port;
+
+    // Ref: https://docs.cloud.google.com/vertex-ai/docs/predictions/custom-container-requirements#aip-variables
+    gcp_params() {
+        enabled = getenv("AIP_MODE", "") == "PREDICTION";
+        path_health = getenv("AIP_HEALTH_ROUTE", "", true); // default: using the route defined in server.cpp
+        path_predict = getenv("AIP_PREDICT_ROUTE", "/predict", true);
+        port = std::stoi(getenv("AIP_HTTP_PORT", "8080"));
+    }
+
+    static std::string getenv(const char * name, const std::string & default_value, bool ensure_leading_slash = false) {
+        const char * value = std::getenv(name);
+        if (value == nullptr || value[0] == '\0') {
+            return default_value;
+        }
+        std::string val = value;
+        if (ensure_leading_slash && !val.empty() && val[0] != '/') {
+            val.insert(val.begin(), '/');
+        }
+        return val;
+    }
+};
+
 bool server_http_context::init(const common_params & params) {
+    const gcp_params gcp;
+
     path_prefix = params.api_prefix;
     port = params.port;
     hostname = params.hostname;
+
+    if (gcp.enabled) {
+        LOG_INF("%s: Google Cloud Platform compat: health route = %s, predict route = %s, port = %d\n", __func__, gcp.path_health.c_str(), gcp.path_predict.c_str(), gcp.port);
+
+        if (port != gcp.port) {
+            LOG_WRN("%s: Google Cloud Platform compat: overriding server port %d with AIP_HTTP_PORT %d\n", __func__, port, gcp.port);
+        }
+
+        port = gcp.port;
+    }
 
     auto & srv = pimpl->srv;
 
@@ -104,6 +156,16 @@ bool server_http_context::init(const common_params & params) {
     // set timeouts and change hostname and port
     srv->set_read_timeout (params.timeout_read);
     srv->set_write_timeout(params.timeout_write);
+    srv->set_socket_options([reuse_port = params.reuse_port](socket_t sock) {
+        httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEADDR, 1);
+        if (reuse_port) {
+#ifdef SO_REUSEPORT
+            httplib::set_socket_opt(sock, SOL_SOCKET, SO_REUSEPORT, 1);
+#else
+            LOG_WRN("%s: SO_REUSEPORT is not supported\n", __func__);
+#endif
+        }
+    });
 
     if (params.api_keys.size() == 1) {
         auto key = params.api_keys[0];
@@ -123,7 +185,10 @@ bool server_http_context::init(const common_params & params) {
             "/v1/health",
             "/models",
             "/v1/models",
-            "/api/tags"
+            "/",
+            "/index.html",
+            "/bundle.js",
+            "/bundle.css",
         };
 
         // If API key is not set, skip validation
@@ -131,8 +196,8 @@ bool server_http_context::init(const common_params & params) {
             return true;
         }
 
-        // If path is public or is static file, skip validation
-        if (public_endpoints.find(req.path) != public_endpoints.end() || req.path == "/") {
+        // If path is public or static file, skip validation
+        if (public_endpoints.find(req.path) != public_endpoints.end()) {
             return true;
         }
 
@@ -175,14 +240,16 @@ bool server_http_context::init(const common_params & params) {
     auto middleware_server_state = [this](const httplib::Request & req, httplib::Response & res) {
         bool ready = is_ready.load();
         if (!ready) {
+#ifdef LLAMA_BUILD_WEBUI
             auto tmp = string_split<std::string>(req.path, '.');
             if (req.path == "/" || tmp.back() == "html") {
-                res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
                 res.status = 503;
-            } else if (req.path == "/models" || req.path == "/v1/models" || req.path == "/api/tags") {
-                // allow the models endpoint to be accessed during loading
-                return true;
-            } else {
+                res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
+            } else
+#endif
+            {
+                // no endpoints is allowed to be accessed when the server is not ready
+                // this is to prevent any data races or inconsistent states
                 res.status = 503;
                 res.set_content(
                     safe_json_to_str(json {
@@ -222,11 +289,17 @@ bool server_http_context::init(const common_params & params) {
 
     int n_threads_http = params.n_threads_http;
     if (n_threads_http < 1) {
-        // +2 threads for monitoring endpoints
-        n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
+        // +4 threads for monitoring, health and some threads reserved for MCP and other tasks in the future
+        n_threads_http = std::max(params.n_parallel + 4, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     LOG_INF("%s: using %d threads for HTTP server\n", __func__, n_threads_http);
-    srv->new_task_queue = [n_threads_http] { return new httplib::ThreadPool(n_threads_http); };
+    srv->new_task_queue = [n_threads_http] {
+        // spawn n_threads_http fixed thread (always alive), while allow up to 1024 max possible additional threads
+        // when n_threads_http is used, server will create new "dynamic" threads that will be destroyed after processing each request
+        // ref: https://github.com/yhirose/cpp-httplib/pull/2368
+        size_t max_threads = (size_t)n_threads_http + 1024;
+        return new httplib::ThreadPool(n_threads_http, max_threads);
+    };
 
     //
     // Web UI setup
@@ -244,19 +317,24 @@ bool server_http_context::init(const common_params & params) {
                 return 1;
             }
         } else {
+#ifdef LLAMA_BUILD_WEBUI
             // using embedded static index.html
-            srv->Get(params.api_prefix + "/", [](const httplib::Request & req, httplib::Response & res) {
-                if (req.get_header_value("Accept-Encoding").find("gzip") == std::string::npos) {
-                    res.set_content("Error: gzip is not supported by this browser", "text/plain");
-                } else {
-                    res.set_header("Content-Encoding", "gzip");
-                    // COEP and COOP headers, required by pyodide (python interpreter)
-                    res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
-                    res.set_header("Cross-Origin-Opener-Policy", "same-origin");
-                    res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
-                }
+            srv->Get(params.api_prefix + "/", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                // COEP and COOP headers, required by pyodide (python interpreter)
+                res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
+                res.set_header("Cross-Origin-Opener-Policy", "same-origin");
+                res.set_content(reinterpret_cast<const char*>(index_html), index_html_len, "text/html; charset=utf-8");
                 return false;
             });
+            srv->Get(params.api_prefix + "/bundle.js", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(bundle_js), bundle_js_len, "application/javascript; charset=utf-8");
+                return false;
+            });
+            srv->Get(params.api_prefix + "/bundle.css", [](const httplib::Request & /*req*/, httplib::Response & res) {
+                res.set_content(reinterpret_cast<const char*>(bundle_css), bundle_css_len, "text/css; charset=utf-8");
+                return false;
+            });
+#endif
         }
     }
     return true;
@@ -334,19 +412,35 @@ static std::map<std::string, std::string> get_headers(const httplib::Request & r
     return headers;
 }
 
-static void process_handler_response(server_http_res_ptr & response, httplib::Response & res) {
+static std::string build_query_string(const httplib::Request & req) {
+    std::string qs;
+    for (const auto & [key, value] : req.params) {
+        if (!qs.empty()) {
+            qs += '&';
+        }
+        qs += httplib::encode_query_component(key) + "=" + httplib::encode_query_component(value);
+    }
+    return qs;
+}
+
+// using unique_ptr for request to allow safe capturing in lambdas
+using server_http_req_ptr = std::unique_ptr<server_http_req>;
+
+static void process_handler_response(server_http_req_ptr && request, server_http_res_ptr & response, httplib::Response & res) {
     if (response->is_stream()) {
         res.status = response->status;
         set_headers(res, response->headers);
         std::string content_type = response->content_type;
         // convert to shared_ptr as both chunked_content_provider() and on_complete() need to use it
+        std::shared_ptr<server_http_req> q_ptr = std::move(request);
         std::shared_ptr<server_http_res> r_ptr = std::move(response);
         const auto chunked_content_provider = [response = r_ptr](size_t, httplib::DataSink & sink) -> bool {
             std::string chunk;
             bool has_next = response->next(chunk);
             if (!chunk.empty()) {
-                // TODO: maybe handle sink.write unsuccessful? for now, we rely on is_connection_closed()
-                sink.write(chunk.data(), chunk.size());
+                if (!sink.write(chunk.data(), chunk.size())) {
+                    return false;
+                }
                 SRV_DBG("http: streamed chunk: %s\n", chunk.c_str());
             }
             if (!has_next) {
@@ -355,8 +449,9 @@ static void process_handler_response(server_http_res_ptr & response, httplib::Re
             }
             return has_next;
         };
-        const auto on_complete = [response = r_ptr](bool) mutable {
+        const auto on_complete = [request = q_ptr, response = r_ptr](bool) mutable {
             response.reset(); // trigger the destruction of the response object
+            request.reset();  // trigger the destruction of the request object
         };
         res.set_chunked_content_provider(content_type, chunked_content_provider, on_complete);
     } else {
@@ -367,28 +462,239 @@ static void process_handler_response(server_http_res_ptr & response, httplib::Re
 }
 
 void server_http_context::get(const std::string & path, const server_http_context::handler_t & handler) const {
+    handlers.emplace(path, handler);
     pimpl->srv->Get(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
-        server_http_res_ptr response = handler(server_http_req{
+        server_http_req_ptr request = std::make_unique<server_http_req>(server_http_req{
             get_params(req),
             get_headers(req),
             req.path,
+            build_query_string(req),
             req.body,
+            {},
             req.is_connection_closed
         });
-        process_handler_response(response, res);
+        server_http_res_ptr response = handler(*request);
+        process_handler_response(std::move(request), response, res);
     });
 }
 
 void server_http_context::post(const std::string & path, const server_http_context::handler_t & handler) const {
+    handlers.emplace(path, handler);
     pimpl->srv->Post(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
-        server_http_res_ptr response = handler(server_http_req{
+        std::string body = req.body;
+        std::map<std::string, uploaded_file> files;
+
+        if (req.is_multipart_form_data()) {
+            // translate text fields to a JSON object and use it as the body
+            json form_json = json::object();
+            for (const auto & [key, field] : req.form.fields) {
+                if (form_json.contains(key)) {
+                    // if the key already exists, convert it to an array
+                    if (!form_json[key].is_array()) {
+                        json existing_value = form_json[key];
+                        form_json[key] = json::array({existing_value});
+                    }
+                    form_json[key].push_back(field.content);
+                } else {
+                    form_json[key] = field.content;
+                }
+            }
+            body = form_json.dump();
+
+            // populate files from multipart form
+            for (const auto & [key, file] : req.form.files) {
+                files[key] = uploaded_file{
+                    raw_buffer(file.content.begin(), file.content.end()),
+                    file.filename,
+                    file.content_type,
+                };
+            }
+        }
+
+        server_http_req_ptr request = std::make_unique<server_http_req>(server_http_req{
             get_params(req),
             get_headers(req),
             req.path,
-            req.body,
+            build_query_string(req),
+            body,
+            std::move(files),
             req.is_connection_closed
         });
-        process_handler_response(response, res);
+        server_http_res_ptr response = handler(*request);
+        process_handler_response(std::move(request), response, res);
     });
 }
 
+//
+// Vertex AI Prediction protocol (AIP_PREDICT_ROUTE)
+// https://cloud.google.com/vertex-ai/docs/predictions/custom-container-requirements
+//
+
+// Derives the camelCase @requestFormat alias for a registered path.
+// e.g. "/v1/chat/completions" -> "chatCompletions", "/apply-template" -> "applyTemplate"
+static std::string path_to_gcp_format(const std::string & path) {
+    std::string s = path;
+    if (s.size() > 3 && s[0] == '/' && s[1] == 'v' && s[2] == '1') {
+        s = s.substr(3);
+    }
+    if (!s.empty() && s[0] == '/') {
+        s = s.substr(1);
+    }
+    std::string result;
+    bool cap = false;
+    for (unsigned char c : s) {
+        if (c == ':') break; // stop before path parameters
+        if (c == '/' || c == '-' || c == '_') {
+            cap = true;
+        } else {
+            result += cap ? (char)std::toupper(c) : (char)c;
+            cap = false;
+        }
+    }
+    return result;
+}
+
+static json parse_gcp_predict_response(const server_http_res_ptr & res) {
+    if (res == nullptr) {
+        throw std::runtime_error("empty response from internal handler");
+    }
+    if (res->is_stream()) {
+        throw std::invalid_argument("predict route does not support streaming responses");
+    }
+    if (res->data.empty()) {
+        return nullptr;
+    }
+    try {
+        return json::parse(res->data);
+    } catch (...) {
+        return res->data;
+    }
+}
+
+void server_http_context::register_gcp_compat() {
+    const gcp_params gcp;
+
+    if (!gcp.enabled) {
+        // do nothing
+        return;
+    }
+
+    if (handlers.count(gcp.path_predict)) {
+        LOG_ERR("%s: AIP_PREDICT_ROUTE=%s conflicts with an existing llama-server route\n", __func__, gcp.path_predict.c_str());
+        exit(1);
+    }
+
+    // camelCase alias -> canonical path (first registration wins on collision)
+    // e.g. "chatCompletions" -> "/v1/chat/completions"
+    std::unordered_map<std::string, std::string> alias_to_path;
+    for (const auto & [path, _] : handlers) {
+        alias_to_path.emplace(path_to_gcp_format(path), path);
+    }
+
+    if (!gcp.path_health.empty()) {
+        auto health_handler = handlers.find("/health");
+        GGML_ASSERT(health_handler != handlers.end());
+        get(gcp.path_health, health_handler->second);
+    }
+
+    post(gcp.path_predict, [this, alias_to_path = std::move(alias_to_path)](const server_http_req & req) -> server_http_res_ptr {
+        static const auto build_error = [](const std::string & message, error_type type) -> json {
+            return json {{"error", format_error_response(message, type)}};
+        };
+
+        json data;
+        try {
+            data = json::parse(req.body);
+        } catch (const std::exception & e) {
+            auto res = std::make_unique<server_http_res>();
+            res->status = 400;
+            res->data = safe_json_to_str({{"error", format_error_response(e.what(), ERROR_TYPE_INVALID_REQUEST)}});
+            return res;
+        }
+        if (!data.is_object()) {
+            auto res = std::make_unique<server_http_res>();
+            res->status = 400;
+            res->data = safe_json_to_str({{"error", format_error_response("request body must be a JSON object", ERROR_TYPE_INVALID_REQUEST)}});
+            return res;
+        }
+        if (!data.contains("instances") || !data.at("instances").is_array()) {
+            auto res = std::make_unique<server_http_res>();
+            res->status = 400;
+            res->data = safe_json_to_str({{"error", format_error_response("request body must include an array field named instances", ERROR_TYPE_INVALID_REQUEST)}});
+            return res;
+        }
+
+        const json & instances = data.at("instances");
+        static const size_t MAX_INSTANCES = 128;
+        if (instances.size() > MAX_INSTANCES) {
+            auto res = std::make_unique<server_http_res>();
+            res->status = 400;
+            res->data = safe_json_to_str({{"error", format_error_response("instances array exceeds maximum size of " + std::to_string(MAX_INSTANCES), ERROR_TYPE_INVALID_REQUEST)}});
+            return res;
+        }
+
+        std::vector<std::future<json>> futures;
+        futures.reserve(instances.size());
+
+        for (const auto & instance : instances) {
+            futures.push_back(std::async(std::launch::async, [this, &req, &alias_to_path, instance]() -> json {
+                if (!instance.is_object()) {
+                    return build_error("each instance must be a JSON object", ERROR_TYPE_INVALID_REQUEST);
+                }
+                if (!instance.contains("@requestFormat") || !instance.at("@requestFormat").is_string()) {
+                    return build_error("each instance must include a string @requestFormat", ERROR_TYPE_INVALID_REQUEST);
+                }
+
+                try {
+                    json payload = instance;
+                    const std::string format = payload.at("@requestFormat").get<std::string>();
+                    payload.erase("@requestFormat");
+
+                    if (payload.contains("stream")) {
+                        LOG_WRN("%s: ignoring client-provided stream field in instance, streaming is not supported in predict route\n", __func__);
+                        payload["stream"] = false;
+                    }
+
+                    // accept both camelCase aliases (e.g. "chatCompletions") and direct paths
+                    std::string dispatch_path;
+                    auto it_alias = alias_to_path.find(format);
+                    if (it_alias != alias_to_path.end()) {
+                        dispatch_path = it_alias->second;
+                    } else if (handlers.count(format)) {
+                        dispatch_path = format;
+                    } else {
+                        return build_error("no handler registered for @requestFormat: " + format, ERROR_TYPE_INVALID_REQUEST);
+                    }
+
+                    const server_http_req internal_req {
+                        req.params,
+                        req.headers,
+                        path_prefix + dispatch_path,
+                        req.query_string,
+                        payload.dump(),
+                        {},
+                        req.should_stop,
+                    };
+
+                    server_http_res_ptr internal_res = handlers.at(dispatch_path)(internal_req);
+                    return parse_gcp_predict_response(internal_res);
+                } catch (const std::invalid_argument & e) {
+                    return build_error(e.what(), ERROR_TYPE_INVALID_REQUEST);
+                } catch (const std::exception & e) {
+                    return build_error(e.what(), ERROR_TYPE_SERVER);
+                } catch (...) {
+                    return build_error("unknown error", ERROR_TYPE_SERVER);
+                }
+            }));
+        }
+
+        json predictions = json::array();
+        for (auto & future : futures) {
+            predictions.push_back(future.get());
+        }
+
+        auto res = std::make_unique<server_http_res>();
+        res->data = safe_json_to_str({{"predictions", predictions}});
+        return res;
+    });
+}

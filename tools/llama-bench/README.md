@@ -62,6 +62,8 @@ test parameters:
   -ot --override-tensors <tensor name pattern>=<buffer type>;...
                                             (default: disabled)
   -nopo, --no-op-offload <0|1>              (default: 0)
+  -fitt, --fit-target <MiB>                 fit model to device memory with this margin per device in MiB (default: off)
+  -fitc, --fit-ctx <n>                      minimum ctx size for --fit-target (default: 4096)
 
 Multiple values can be given for each parameter by separating them with ','
 or by specifying the parameter multiple times. Ranges can be given as
@@ -80,7 +82,7 @@ Each test is repeated the number of times given by `-r`, and the results are ave
 
 Using the `-d <n>` option, each test can be run at a specified context depth, prefilling the KV cache with `<n>` tokens.
 
-For a description of the other options, see the [main example](../main/README.md).
+For a description of the other options, see the [completion example](../completion/README.md).
 
 > [!NOTE]
 > The measurements with `llama-bench` do not include the times for tokenization and for sampling.

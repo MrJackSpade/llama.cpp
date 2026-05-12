@@ -32,8 +32,17 @@
  */
 
 import { browser } from '$app/environment';
-import { SETTING_CONFIG_DEFAULT } from '$lib/constants/settings-config';
-import { ParameterSyncService } from '$lib/services/parameter-sync';
+import { ColorMode } from '$lib/enums';
+import type { SettingsExportType } from '$lib/types';
+import { setMode } from 'mode-watcher';
+import {
+	CONFIG_LOCALSTORAGE_KEY,
+	SETTING_CONFIG_DEFAULT,
+	SETTINGS_KEYS,
+	USER_OVERRIDES_LOCALSTORAGE_KEY
+} from '$lib/constants';
+import { IsMobile } from '$lib/hooks/is-mobile.svelte';
+import { ParameterSyncService } from '$lib/services/parameter-sync.service';
 import { serverStore } from '$lib/stores/server.svelte';
 import {
 	configToParameterRecord,
@@ -41,24 +50,27 @@ import {
 	getConfigValue,
 	setConfigValue
 } from '$lib/utils';
-import {
-	CONFIG_LOCALSTORAGE_KEY,
-	USER_OVERRIDES_LOCALSTORAGE_KEY
-} from '$lib/constants/localstorage-keys';
 
 class SettingsStore {
-	// ─────────────────────────────────────────────────────────────────────────────
-	// State
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * State
+	 *
+	 *
+	 */
 
 	config = $state<SettingsConfigType>({ ...SETTING_CONFIG_DEFAULT });
-	theme = $state<string>('auto');
 	isInitialized = $state(false);
 	userOverrides = $state<Set<string>>(new Set());
 
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Utilities (private helpers)
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * Utilities (private helpers)
+	 *
+	 *
+	 */
 
 	/**
 	 * Helper method to get server defaults with null safety
@@ -66,7 +78,8 @@ class SettingsStore {
 	 */
 	private getServerDefaults(): Record<string, string | number | boolean> {
 		const serverParams = serverStore.defaultParams;
-		return serverParams ? ParameterSyncService.extractServerDefaults(serverParams) : {};
+		const webuiSettings = serverStore.webuiSettings;
+		return ParameterSyncService.extractServerDefaults(serverParams, webuiSettings);
 	}
 
 	constructor() {
@@ -75,9 +88,13 @@ class SettingsStore {
 		}
 	}
 
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Lifecycle
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * Lifecycle
+	 *
+	 *
+	 */
 
 	/**
 	 * Initialize the settings store by loading from localStorage
@@ -85,7 +102,9 @@ class SettingsStore {
 	initialize() {
 		try {
 			this.loadConfig();
-			this.loadTheme();
+			this.migrateLegacyTheme();
+			// Apply the persisted theme from config on initial load
+			setMode(this.config[SETTINGS_KEYS.THEME] as ColorMode);
 			this.isInitialized = true;
 		} catch (error) {
 			console.error('Failed to initialize settings store:', error);
@@ -109,6 +128,13 @@ class SettingsStore {
 				...savedVal
 			};
 
+			// Default sendOnEnter to false on mobile when the user has no saved preference
+			if (!(SETTINGS_KEYS.SEND_ON_ENTER in savedVal)) {
+				if (new IsMobile().current) {
+					this.config[SETTINGS_KEYS.SEND_ON_ENTER] = false;
+				}
+			}
+
 			// Load user overrides
 			const savedOverrides = JSON.parse(
 				localStorage.getItem(USER_OVERRIDES_LOCALSTORAGE_KEY) || '[]'
@@ -122,16 +148,29 @@ class SettingsStore {
 	}
 
 	/**
-	 * Load theme from localStorage
+	 * Migrate the legacy un-namespaced "theme" localStorage key into config.
+	 * Previously theme was stored separately in localStorage("theme") — now it lives
+	 * inside the config object alongside all other settings.
+	 * After migration the legacy key is removed.
 	 */
-	private loadTheme() {
+	private migrateLegacyTheme() {
 		if (!browser) return;
 
-		this.theme = localStorage.getItem('theme') || 'auto';
+		const legacyTheme = localStorage.getItem('theme');
+		if (legacyTheme) {
+			this.config[SETTINGS_KEYS.THEME] = legacyTheme;
+			localStorage.removeItem('theme');
+			this.saveConfig();
+			setMode(legacyTheme as ColorMode);
+		}
 	}
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Config Updates
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * Config Updates
+	 *
+	 *
+	 */
 
 	/**
 	 * Update a specific configuration setting
@@ -208,56 +247,48 @@ class SettingsStore {
 	}
 
 	/**
-	 * Update the theme setting
+	 * Update the theme setting.
 	 * @param newTheme - The new theme value
 	 */
 	updateTheme(newTheme: string) {
-		this.theme = newTheme;
-		this.saveTheme();
+		this.updateConfig(SETTINGS_KEYS.THEME, newTheme);
+
+		setMode(newTheme as ColorMode);
 	}
 
 	/**
-	 * Save the current theme to localStorage
+	 *
+	 *
+	 * Reset
+	 *
+	 *
 	 */
-	private saveTheme() {
-		if (!browser) return;
-
-		try {
-			if (this.theme === 'auto') {
-				localStorage.removeItem('theme');
-			} else {
-				localStorage.setItem('theme', this.theme);
-			}
-		} catch (error) {
-			console.error('Failed to save theme to localStorage:', error);
-		}
-	}
-
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Reset
-	// ─────────────────────────────────────────────────────────────────────────────
 
 	/**
 	 * Reset configuration to defaults
 	 */
 	resetConfig() {
 		this.config = { ...SETTING_CONFIG_DEFAULT };
+
 		this.saveConfig();
 	}
 
 	/**
-	 * Reset theme to auto
+	 * Reset theme to default value.
+	 * Theme is now stored inside the config object.
 	 */
 	resetTheme() {
-		this.theme = 'auto';
-		this.saveTheme();
+		this.updateConfig(SETTINGS_KEYS.THEME, SETTING_CONFIG_DEFAULT[SETTINGS_KEYS.THEME]);
+
+		setMode(SETTING_CONFIG_DEFAULT[SETTINGS_KEYS.THEME] as ColorMode);
 	}
 
 	/**
-	 * Reset all settings to defaults
+	 * Reset all settings to defaults.
 	 */
 	resetAll() {
 		this.resetConfig();
+
 		this.resetTheme();
 	}
 
@@ -266,41 +297,40 @@ class SettingsStore {
 	 */
 	resetParameterToServerDefault(key: string): void {
 		const serverDefaults = this.getServerDefaults();
+		const webuiSettings = serverStore.webuiSettings;
 
-		if (serverDefaults[key] !== undefined) {
-			const value = normalizeFloatingPoint(serverDefaults[key]);
-
-			this.config[key as keyof SettingsConfigType] =
-				value as SettingsConfigType[keyof SettingsConfigType];
-		} else {
-			if (key in SETTING_CONFIG_DEFAULT) {
-				const defaultValue = getConfigValue(SETTING_CONFIG_DEFAULT, key);
-
-				setConfigValue(this.config, key, defaultValue);
-			}
+		if (webuiSettings && key in webuiSettings) {
+			// UI setting from admin config: write actual value
+			setConfigValue(this.config, key, webuiSettings[key]);
+		} else if (serverDefaults[key] !== undefined) {
+			// sampling param known by server: clear it, let server decide
+			setConfigValue(this.config, key, '');
+		} else if (key in SETTING_CONFIG_DEFAULT) {
+			setConfigValue(this.config, key, getConfigValue(SETTING_CONFIG_DEFAULT, key));
 		}
 
 		this.userOverrides.delete(key);
 		this.saveConfig();
 	}
 
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Server Sync
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * Server Sync
+	 *
+	 *
+	 */
 
 	/**
 	 * Initialize settings with props defaults when server properties are first loaded
 	 * This sets up the default values from /props endpoint
 	 */
 	syncWithServerDefaults(): void {
-		const serverParams = serverStore.defaultParams;
-		if (!serverParams) {
-			console.warn('No server parameters available for initialization');
-
-			return;
-		}
-
 		const propsDefaults = this.getServerDefaults();
+		if (Object.keys(propsDefaults).length === 0) return;
+
+		const webuiSettings = serverStore.webuiSettings;
+		const webuiSettingsKeys = new Set(webuiSettings ? Object.keys(webuiSettings) : []);
 
 		for (const [key, propsValue] of Object.entries(propsDefaults)) {
 			const currentValue = getConfigValue(this.config, key);
@@ -308,17 +338,31 @@ class SettingsStore {
 			const normalizedCurrent = normalizeFloatingPoint(currentValue);
 			const normalizedDefault = normalizeFloatingPoint(propsValue);
 
+			// if user value matches server, it's not a real override
 			if (normalizedCurrent === normalizedDefault) {
 				this.userOverrides.delete(key);
-				setConfigValue(this.config, key, propsValue);
-			} else if (!this.userOverrides.has(key)) {
-				setConfigValue(this.config, key, propsValue);
+
+				if (
+					!webuiSettingsKeys.has(key) &&
+					getConfigValue(SETTING_CONFIG_DEFAULT, key) === undefined
+				) {
+					setConfigValue(this.config, key, undefined);
+				}
+			}
+		}
+
+		// webui settings need actual values in config (no placeholder mechanism),
+		// so write them for non-overridden keys
+		if (webuiSettings) {
+			for (const [key, value] of Object.entries(webuiSettings)) {
+				if (!this.userOverrides.has(key) && value !== undefined) {
+					setConfigValue(this.config, key, value);
+				}
 			}
 		}
 
 		this.saveConfig();
-		console.log('Settings initialized with props defaults:', propsDefaults);
-		console.log('Current user overrides after sync:', Array.from(this.userOverrides));
+		console.log('User overrides after sync:', Array.from(this.userOverrides));
 	}
 
 	/**
@@ -328,19 +372,17 @@ class SettingsStore {
 	 */
 	forceSyncWithServerDefaults(): void {
 		const propsDefaults = this.getServerDefaults();
-		const syncableKeys = ParameterSyncService.getSyncableParameterKeys();
+		const webuiSettings = serverStore.webuiSettings;
 
-		for (const key of syncableKeys) {
-			if (propsDefaults[key] !== undefined) {
-				const normalizedValue = normalizeFloatingPoint(propsDefaults[key]);
-
-				setConfigValue(this.config, key, normalizedValue);
-			} else {
-				if (key in SETTING_CONFIG_DEFAULT) {
-					const defaultValue = getConfigValue(SETTING_CONFIG_DEFAULT, key);
-
-					setConfigValue(this.config, key, defaultValue);
-				}
+		for (const key of ParameterSyncService.getSyncableParameterKeys()) {
+			if (webuiSettings && key in webuiSettings) {
+				// UI setting from admin config: write actual value
+				setConfigValue(this.config, key, webuiSettings[key]);
+			} else if (propsDefaults[key] !== undefined) {
+				// sampling param: clear it, let server decide
+				setConfigValue(this.config, key, '');
+			} else if (key in SETTING_CONFIG_DEFAULT) {
+				setConfigValue(this.config, key, getConfigValue(SETTING_CONFIG_DEFAULT, key));
 			}
 
 			this.userOverrides.delete(key);
@@ -349,9 +391,13 @@ class SettingsStore {
 		this.saveConfig();
 	}
 
-	// ─────────────────────────────────────────────────────────────────────────────
-	// Utilities
-	// ─────────────────────────────────────────────────────────────────────────────
+	/**
+	 *
+	 *
+	 * Utilities
+	 *
+	 *
+	 */
 
 	/**
 	 * Get a specific configuration value
@@ -412,10 +458,86 @@ class SettingsStore {
 		this.saveConfig();
 		console.log('Cleared all user overrides');
 	}
+
+	/**
+	 *
+	 *
+	 * Import / Export
+	 *
+	 *
+	 */
+
+	/**
+	 * Export all settings as a versioned JSON-compatible object.
+	 * The export captures the full config (excluding sensitive values like API key)
+	 * and user overrides. Sensitive fields are filtered out for security by default.
+	 * @param includeSensitiveData - If true, include sensitive fields (apiKey, MCP server headers) in export
+	 */
+	exportSettings(includeSensitiveData: boolean = false): SettingsExportType {
+		// Build config excluding sensitive data unless user opts in
+		const configToExport: Record<string, string | number | boolean | undefined> =
+			includeSensitiveData
+				? { ...this.config }
+				: Object.fromEntries(Object.entries(this.config).filter(([key]) => key !== 'apiKey'));
+
+		// Handle MCP servers: exclude custom headers unless user opts in
+		if ('mcpServers' in configToExport && !includeSensitiveData) {
+			try {
+				const mcpServers = JSON.parse(configToExport.mcpServers as string) as Array<
+					Record<string, unknown>
+				>;
+				const safeServers = mcpServers.map((server) => {
+					delete server.headers;
+					return server;
+				});
+				configToExport.mcpServers = JSON.stringify(safeServers);
+			} catch {
+				// If parsing fails, just exclude the entire mcpServers field
+				delete (configToExport as Record<string, unknown>).mcpServers;
+			}
+		}
+
+		return {
+			version: 1,
+			timestamp: Date.now(),
+			config: configToExport,
+			userOverrides: Array.from(this.userOverrides)
+		};
+	}
+
+	/**
+	 * Import settings from a previously exported object.
+	 * Restores config (including theme) and user overrides.
+	 * @param data - The exported settings object
+	 */
+	importSettings(data: SettingsExportType): void {
+		if (!browser) return;
+
+		if (!data || !data.config) {
+			throw new Error('Invalid settings data: missing config');
+		}
+
+		// Restore config (theme is included in config)
+		this.config = {
+			...SETTING_CONFIG_DEFAULT,
+			...data.config
+		};
+
+		// Restore user overrides (derived state — may be stale if server defaults differ)
+		this.userOverrides = new Set(data.userOverrides ?? []);
+
+		// Persist to localStorage
+		this.saveConfig();
+
+		// Apply theme for immediate visual feedback
+		setMode(this.config[SETTINGS_KEYS.THEME] as ColorMode);
+
+		console.log('Settings imported successfully');
+	}
 }
 
 export const settingsStore = new SettingsStore();
 
 export const config = () => settingsStore.config;
-export const theme = () => settingsStore.theme;
+export const theme = () => settingsStore.config[SETTINGS_KEYS.THEME];
 export const isInitialized = () => settingsStore.isInitialized;
